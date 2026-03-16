@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
-import { Badge } from "../components/ui/badge";
-import { 
+import {
   ArrowLeft,
   MapPin,
   Package,
@@ -14,6 +12,8 @@ import {
   AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
+import PlacesAutocomplete from "../components/PlacesAutocomplete";
+import { Location } from "../types";
 
 export default function CustomerRequestErrand() {
   const navigate = useNavigate();
@@ -22,6 +22,8 @@ export default function CustomerRequestErrand() {
   const [items, setItems] = useState("");
   const [pickupAddress, setPickupAddress] = useState("");
   const [dropoffAddress, setDropoffAddress] = useState("");
+  const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
+  const [dropoffLocation, setDropoffLocation] = useState<Location | null>(null);
   const [estimatedPrice, setEstimatedPrice] = useState(8.50);
 
   const handleSubmit = () => {
@@ -100,11 +102,15 @@ export default function CustomerRequestErrand() {
             <MapPin className="w-4 h-4 text-green-600" />
             Pickup location *
           </Label>
-          <Input
+          <PlacesAutocomplete
             id="pickup"
-            placeholder="Enter pickup address"
             value={pickupAddress}
-            onChange={(e) => setPickupAddress(e.target.value)}
+            onChange={setPickupAddress}
+            onPlaceSelect={(loc) => {
+              setPickupLocation(loc);
+              setPickupAddress(loc.address);
+            }}
+            placeholder="Search pickup address"
           />
         </div>
 
@@ -114,11 +120,15 @@ export default function CustomerRequestErrand() {
             <MapPin className="w-4 h-4 text-red-600" />
             Dropoff location *
           </Label>
-          <Input
+          <PlacesAutocomplete
             id="dropoff"
-            placeholder="Enter dropoff address"
             value={dropoffAddress}
-            onChange={(e) => setDropoffAddress(e.target.value)}
+            onChange={setDropoffAddress}
+            onPlaceSelect={(loc) => {
+              setDropoffLocation(loc);
+              setDropoffAddress(loc.address);
+            }}
+            placeholder="Search dropoff address"
           />
         </div>
 

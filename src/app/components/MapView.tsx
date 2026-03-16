@@ -1,4 +1,9 @@
-import { MapPin, Navigation } from "lucide-react";
+import { useState, useEffect } from "react";
+import {
+  GoogleMap,
+  DirectionsRenderer,
+  MarkerF,
+} from "@react-google-maps/api";
 import { Location } from "../types";
 
 interface MapViewProps {
@@ -9,105 +14,122 @@ interface MapViewProps {
   className?: string;
 }
 
-export default function MapView({ 
-  startLocation, 
-  endLocation, 
+const mapContainerStyle = { width: "100%", height: "100%" };
+
+const defaultCenter = { lat: 40.7128, lng: -74.006 }; // NYC default
+
+export default function MapView({
+  startLocation,
+  endLocation,
   currentLocation,
   waypoints = [],
-  className = "" 
+  className = "",
 }: MapViewProps) {
+  const [directions, setDirections] =
+    useState<google.maps.DirectionsResult | null>(null);
+
+  useEffect(() => {
+    if (!startLocation || !endLocation) {
+      setDirections(null);
+      return;
+    }
+
+    const service = new google.maps.DirectionsService();
+    service.route(
+      {
+        origin: { lat: startLocation.lat, lng: startLocation.lng },
+        destination: { lat: endLocation.lat, lng: endLocation.lng },
+        waypoints: waypoints.map((wp) => ({
+          location: { lat: wp.lat, lng: wp.lng },
+          stopover: false,
+        })),
+        travelMode: google.maps.TravelMode.BICYCLING,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK && result) {
+          setDirections(result);
+        } else {
+          setDirections(null);
+        }
+      }
+    );
+  }, [startLocation, endLocation, waypoints]);
+
+  const center = currentLocation
+    ? { lat: currentLocation.lat, lng: currentLocation.lng }
+    : startLocation
+    ? { lat: startLocation.lat, lng: startLocation.lng }
+    : defaultCenter;
+
+  const leg = directions?.routes[0]?.legs[0];
+  const duration = leg?.duration?.text ?? null;
+  const distance = leg?.distance?.text ?? null;
+
   return (
-    <div className={`relative bg-gray-200 rounded-xl overflow-hidden ${className}`}>
-      {/* Simulated map background */}
-      <div className="absolute inset-0 opacity-30">
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="gray" strokeWidth="0.5"/>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-
-      {/* Route visualization */}
-      <div className="absolute inset-0 flex items-center justify-center p-8">
-        <div className="relative w-full h-full">
-          {/* Start location */}
-          {startLocation && (
-            <div className="absolute top-1/4 left-1/4 transform -translate-x-1/2 -translate-y-1/2">
-              <div className="bg-blue-600 text-white p-2 rounded-full shadow-lg">
-                <Navigation className="w-4 h-4" />
-              </div>
-              <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1 bg-white px-2 py-1 rounded shadow text-xs whitespace-nowrap">
-                Start
-              </div>
-            </div>
-          )}
-
-          {/* Waypoints */}
-          {waypoints.map((waypoint, index) => (
-            <div 
-              key={index}
-              className="absolute"
-              style={{
-                top: `${40 + index * 10}%`,
-                left: `${40 + index * 10}%`,
-              }}
-            >
-              <div className="bg-orange-500 text-white p-2 rounded-full shadow-lg">
-                <MapPin className="w-4 h-4" />
-              </div>
-            </div>
-          ))}
-
-          {/* Current location (for tracking) */}
-          {currentLocation && (
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse">
-              <div className="bg-green-600 text-white p-3 rounded-full shadow-lg ring-4 ring-green-300">
-                <Bike className="w-5 h-5" />
-              </div>
-            </div>
-          )}
-
-          {/* End location */}
-          {endLocation && (
-            <div className="absolute bottom-1/4 right-1/4 transform translate-x-1/2 translate-y-1/2">
-              <div className="bg-red-600 text-white p-2 rounded-full shadow-lg">
-                <MapPin className="w-4 h-4" />
-              </div>
-              <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1 bg-white px-2 py-1 rounded shadow text-xs whitespace-nowrap">
-                Destination
-              </div>
-            </div>
-          )}
-
-          {/* Route line */}
-          {startLocation && endLocation && (
-            <svg className="absolute inset-0 w-full h-full pointer-events-none">
-              <line
-                x1="25%"
-                y1="25%"
-                x2="75%"
-                y2="75%"
-                stroke="#3b82f6"
-                strokeWidth="3"
-                strokeDasharray="5,5"
-                opacity="0.6"
+    <div className={`relative rounded-xl overflow-hidden ${className}`}>
+      <GoogleMap
+        mapContainerStyle={mapContainerStyle}
+        center={center}
+        zoom={13}
+        options={{
+          disableDefaultUI: false,
+          zoomControl: true,
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: false,
+        }}
+      >
+        {directions ? (
+          <DirectionsRenderer
+            directions={directions}
+            options={{
+              suppressMarkers: false,
+              polylineOptions: { strokeColor: "#2563eb", strokeWeight: 4 },
+            }}
+          />
+        ) : (
+          <>
+            {startLocation && (
+              <MarkerF
+                position={{ lat: startLocation.lat, lng: startLocation.lng }}
+                label={{ text: "A", color: "white" }}
               />
-            </svg>
-          )}
-        </div>
-      </div>
+            )}
+            {endLocation && (
+              <MarkerF
+                position={{ lat: endLocation.lat, lng: endLocation.lng }}
+                label={{ text: "B", color: "white" }}
+              />
+            )}
+          </>
+        )}
 
-      {/* Distance/time overlay */}
-      <div className="absolute top-4 left-4 bg-white px-3 py-2 rounded-lg shadow-md text-sm">
-        <div className="text-gray-600">Estimated time</div>
-        <div className="text-gray-900">15-20 min</div>
-      </div>
+        {currentLocation && (
+          <MarkerF
+            position={{ lat: currentLocation.lat, lng: currentLocation.lng }}
+            icon={{
+              url: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
+            }}
+          />
+        )}
+
+        {waypoints.map((wp, i) => (
+          <MarkerF
+            key={i}
+            position={{ lat: wp.lat, lng: wp.lng }}
+            icon={{
+              url: "https://maps.google.com/mapfiles/ms/icons/orange-dot.png",
+            }}
+          />
+        ))}
+      </GoogleMap>
+
+      {(duration || distance) && (
+        <div className="absolute top-4 left-4 bg-white px-3 py-2 rounded-lg shadow-md text-sm z-10">
+          {distance && <div className="text-gray-600">{distance}</div>}
+          {duration && <div className="text-gray-900 font-medium">{duration}</div>}
+        </div>
+      )}
     </div>
   );
 }
-
-// Missing import for Bike icon
-import { Bike } from "lucide-react";

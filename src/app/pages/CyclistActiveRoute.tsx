@@ -4,21 +4,27 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import MapView from "../components/MapView";
 import ErrandCard from "../components/ErrandCard";
-import { 
-  ArrowLeft, 
-  Navigation, 
-  Play, 
+import PlacesAutocomplete from "../components/PlacesAutocomplete";
+import {
+  ArrowLeft,
+  Navigation,
+  Play,
   Filter,
   AlertCircle
 } from "lucide-react";
 import { mockCurrentRoute, mockErrands } from "../data/mockData";
 import { toast } from "sonner";
+import { Location } from "../types";
 
 export default function CyclistActiveRoute() {
   const navigate = useNavigate();
   const [routeStarted, setRouteStarted] = useState(false);
   const [acceptedErrands, setAcceptedErrands] = useState<string[]>([]);
   const [filterUrgency, setFilterUrgency] = useState<string>("all");
+  const [startAddress, setStartAddress] = useState(mockCurrentRoute.startLocation.address);
+  const [endAddress, setEndAddress] = useState(mockCurrentRoute.endLocation.address);
+  const [startLocation, setStartLocation] = useState<Location>(mockCurrentRoute.startLocation);
+  const [endLocation, setEndLocation] = useState<Location>(mockCurrentRoute.endLocation);
 
   const handleAcceptErrand = (errandId: string) => {
     setAcceptedErrands([...acceptedErrands, errandId]);
@@ -54,9 +60,9 @@ export default function CyclistActiveRoute() {
 
       {/* Map */}
       <div className="p-4">
-        <MapView 
-          startLocation={mockCurrentRoute.startLocation}
-          endLocation={mockCurrentRoute.endLocation}
+        <MapView
+          startLocation={startLocation}
+          endLocation={endLocation}
           waypoints={mockCurrentRoute.waypoints}
           className="h-64"
         />
@@ -74,20 +80,36 @@ export default function CyclistActiveRoute() {
               {routeStarted ? "Active" : "Planning"}
             </Badge>
           </div>
-          
-          <div className="space-y-2 text-sm mb-4">
-            <div className="flex items-start gap-2">
-              <div className="w-2 h-2 bg-blue-600 rounded-full mt-1.5"></div>
+
+          <div className="space-y-3 mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0"></div>
               <div className="flex-1">
-                <div className="text-gray-600">From</div>
-                <div className="text-gray-900">{mockCurrentRoute.startLocation.address}</div>
+                <div className="text-xs text-gray-500 mb-1">From</div>
+                <PlacesAutocomplete
+                  value={startAddress}
+                  onChange={setStartAddress}
+                  onPlaceSelect={(loc) => {
+                    setStartLocation(loc);
+                    setStartAddress(loc.address);
+                  }}
+                  placeholder="Search start location"
+                />
               </div>
             </div>
-            <div className="flex items-start gap-2">
-              <div className="w-2 h-2 bg-red-600 rounded-full mt-1.5"></div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-red-600 rounded-full flex-shrink-0"></div>
               <div className="flex-1">
-                <div className="text-gray-600">To</div>
-                <div className="text-gray-900">{mockCurrentRoute.endLocation.address}</div>
+                <div className="text-xs text-gray-500 mb-1">To</div>
+                <PlacesAutocomplete
+                  value={endAddress}
+                  onChange={setEndAddress}
+                  onPlaceSelect={(loc) => {
+                    setEndLocation(loc);
+                    setEndAddress(loc.address);
+                  }}
+                  placeholder="Search destination"
+                />
               </div>
             </div>
           </div>
