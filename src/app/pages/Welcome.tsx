@@ -21,6 +21,7 @@ export default function Welcome() {
         </div>
 
         <div className="space-y-4 pt-8">
+          {/* Cyclist card */}
           <div className="bg-white rounded-2xl p-6 shadow-lg space-y-4">
             <div className="flex items-center gap-3">
               <div className="bg-blue-100 p-3 rounded-full">
@@ -31,14 +32,24 @@ export default function Welcome() {
                 <p className="text-sm text-gray-600">Earn money on routes you're already taking</p>
               </div>
             </div>
-            <Button 
-              className="w-full bg-blue-600 hover:bg-blue-700"
-              onClick={() => navigate("/cyclist")}
-            >
-              Continue as Cyclist
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 border-blue-200 text-blue-600 hover:bg-blue-50"
+                onClick={() => navigate("/login?role=cyclist")}
+              >
+                Sign In
+              </Button>
+              <Button
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                onClick={() => navigate("/signup?role=cyclist")}
+              >
+                Sign Up
+              </Button>
+            </div>
           </div>
 
+          {/* Customer card */}
           <div className="bg-white rounded-2xl p-6 shadow-lg space-y-4">
             <div className="flex items-center gap-3">
               <div className="bg-green-100 p-3 rounded-full">
@@ -49,12 +60,21 @@ export default function Welcome() {
                 <p className="text-sm text-gray-600">Get errands done quickly and affordably</p>
               </div>
             </div>
-            <Button 
-              className="w-full bg-green-600 hover:bg-green-700"
-              onClick={() => navigate("/customer")}
-            >
-              Continue as Customer
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 border-green-200 text-green-600 hover:bg-green-50"
+                onClick={() => navigate("/login?role=customer")}
+              >
+                Sign In
+              </Button>
+              <Button
+                className="flex-1 bg-green-600 hover:bg-green-700"
+                onClick={() => navigate("/signup?role=customer")}
+              >
+                Sign Up
+              </Button>
+            </div>
           </div>
         </div>
 

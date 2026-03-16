@@ -1,6 +1,8 @@
 import { createBrowserRouter } from "react-router";
 import Root from "./Root";
 import Welcome from "./pages/Welcome";
+import Login from "./pages/Login";
+import SignUp from "./pages/SignUp";
 import CyclistDashboard from "./pages/CyclistDashboard";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import CyclistActiveRoute from "./pages/CyclistActiveRoute";
@@ -15,6 +17,8 @@ export const router = createBrowserRouter([
     Component: Root,
     children: [
       { index: true, Component: Welcome },
+      { path: "login", Component: Login },
+      { path: "signup", Component: SignUp },
       { path: "loading", Component: LoadingScreen },
       { path: "cyclist", Component: CyclistDashboard },
       { path: "cyclist/route", Component: CyclistActiveRoute },
