@@ -10,14 +10,20 @@ import {
   Navigation,
   Play,
   Filter,
-  AlertCircle
+  AlertCircle,
+  PackageCheck,
+  X
 } from "lucide-react";
 import { mockCurrentRoute, mockErrands } from "../data/mockData";
 import { toast } from "sonner";
 import { Location } from "../types";
+import { collection, addDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { useAuth } from "../context/AuthContext";
 
 export default function CyclistActiveRoute() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [routeStarted, setRouteStarted] = useState(false);
   const [acceptedErrands, setAcceptedErrands] = useState<string[]>([]);
   const [filterUrgency, setFilterUrgency] = useState<string>("all");
@@ -26,10 +32,29 @@ export default function CyclistActiveRoute() {
   const [startLocation, setStartLocation] = useState<Location>(mockCurrentRoute.startLocation);
   const [endLocation, setEndLocation] = useState<Location>(mockCurrentRoute.endLocation);
 
-  const handleAcceptErrand = (errandId: string) => {
-    setAcceptedErrands([...acceptedErrands, errandId]);
+  const handleAcceptErrand = async (errandId: string) => {
     const errand = mockErrands.find(e => e.id === errandId);
-    toast.success(`Errand accepted! +$${errand?.payment.toFixed(2)}`);
+    if (!errand) return;
+
+    setAcceptedErrands([...acceptedErrands, errandId]);
+
+    if (user) {
+      try {
+        await addDoc(collection(db, "users", user.id, "rides"), {
+          earnings: errand.payment,
+          tip: errand.tip ?? 0,
+          completedAt: new Date().toISOString(),
+          description: errand.description,
+          from: errand.pickupLocation.address,
+          to: errand.dropoffLocation.address,
+        });
+      } catch (err) {
+        console.error("Failed to save ride:", err);
+      }
+    }
+
+    const total = errand.payment + (errand.tip ?? 0);
+    toast.success(`Errand accepted! +$${total.toFixed(2)}`);
   };
 
   const availableErrands = mockErrands
@@ -37,12 +62,16 @@ export default function CyclistActiveRoute() {
     .filter(e => filterUrgency === "all" || e.urgency === filterUrgency)
     .sort((a, b) => b.matchScore - a.matchScore);
 
-  const totalEarnings = mockErrands
-    .filter(e => acceptedErrands.includes(e.id))
-    .reduce((sum, e) => sum + e.payment + (e.tip || 0), 0);
+  const acceptedErrandObjects = mockErrands.filter(e => acceptedErrands.includes(e.id));
+
+  const totalEarnings = acceptedErrandObjects.reduce((sum, e) => sum + e.payment + (e.tip || 0), 0);
+
+  const handleRemoveErrand = (errandId: string) => {
+    setAcceptedErrands(acceptedErrands.filter(id => id !== errandId));
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-6">
+    <div className="min-h-screen bg-gray-50 pb-6" style={{ paddingBottom: acceptedErrandObjects.length > 0 && !routeStarted ? "120px" : "24px" }}>
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
@@ -114,22 +143,37 @@ export default function CyclistActiveRoute() {
             </div>
           </div>
 
-          {acceptedErrands.length > 0 && (
-            <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-gray-600">Potential earnings</span>
-              <span className="text-xl text-green-600">${totalEarnings.toFixed(2)}</span>
+          {acceptedErrandObjects.length > 0 && (
+            <div className="pt-3 border-t border-gray-100 space-y-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm text-gray-600 flex items-center gap-1">
+                  <PackageCheck className="w-4 h-4 text-green-600" />
+                  {acceptedErrandObjects.length} job{acceptedErrandObjects.length > 1 ? "s" : ""} queued
+                </span>
+                <span className="text-green-600">${totalEarnings.toFixed(2)}</span>
+              </div>
+              {acceptedErrandObjects.map((e, i) => (
+                <div key={e.id} className="flex items-start gap-2 bg-green-50 rounded-lg p-2 text-sm">
+                  <div className="bg-green-600 text-white w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs mt-0.5">
+                    {i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-gray-800 truncate">{e.description}</div>
+                    <div className="text-gray-500 text-xs truncate">{e.pickupLocation.address} → {e.dropoffLocation.address}</div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-green-700 text-xs">+${(e.payment + (e.tip ?? 0)).toFixed(2)}</span>
+                    {!routeStarted && (
+                      <button onClick={() => handleRemoveErrand(e.id)} className="text-gray-400 hover:text-red-500">
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
-          {!routeStarted && (
-            <Button 
-              onClick={() => setRouteStarted(true)}
-              className="w-full bg-green-600 hover:bg-green-700 mt-3"
-            >
-              <Play className="w-4 h-4 mr-2" />
-              Start Route
-            </Button>
-          )}
         </div>
       </div>
 
@@ -194,6 +238,37 @@ export default function CyclistActiveRoute() {
           </div>
         )}
       </div>
+
+      {/* Sticky Start Trip bar */}
+      {acceptedErrandObjects.length > 0 && !routeStarted && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-xl">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-sm text-gray-500">{acceptedErrandObjects.length} job{acceptedErrandObjects.length > 1 ? "s" : ""} · {acceptedErrandObjects.length * 2 + 2} stops</div>
+              <div className="text-lg text-gray-900">Total: <span className="text-green-600">${totalEarnings.toFixed(2)}</span></div>
+            </div>
+            <Button
+              onClick={() => {
+                const origin = encodeURIComponent(startAddress);
+                const destination = encodeURIComponent(endAddress);
+
+                const stops = acceptedErrandObjects
+                  .flatMap(e => [e.pickupLocation.address, e.dropoffLocation.address])
+                  .map(encodeURIComponent)
+                  .join("|");
+
+                const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=optimize:true|${stops}&travelmode=bicycling`;
+                window.open(url, "_blank");
+                setRouteStarted(true);
+              }}
+              className="bg-green-600 hover:bg-green-700 h-12 px-6 text-base"
+            >
+              <Play className="w-5 h-5 mr-2" />
+              Start Trip
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
