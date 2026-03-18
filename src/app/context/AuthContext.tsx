@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "../lib/firebase";
 import { UserType } from "../types";
 
 interface AuthUser {
@@ -53,16 +56,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (name: string, email: string, password: string, role: UserType, bikeType?: string) => {
-    await new Promise((r) => setTimeout(r, 800));
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const firebaseUser = credential.user;
 
-    const existing = localStorage.getItem(`pathMatch_account_${email}`);
-    if (existing) throw new Error("An account with this email already exists.");
+    await updateProfile(firebaseUser, { displayName: name });
 
-    const newUser: AuthUser & { password: string } = {
-      id: `user_${Date.now()}`,
+    const profile: AuthUser = {
+      id: firebaseUser.uid,
       name,
       email,
-      password,
       role,
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
       rating: 5.0,
@@ -72,9 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...(role === "cyclist" && bikeType ? { bikeType } : {}),
     };
 
-    localStorage.setItem(`pathMatch_account_${email}`, JSON.stringify(newUser));
-    const { password: _pw, ...authUser } = newUser;
-    setUser(authUser);
+    await setDoc(doc(db, "users", firebaseUser.uid), profile);
+    setUser(profile);
   };
 
   const logout = () => setUser(null);
