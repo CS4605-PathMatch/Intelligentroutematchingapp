@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -14,26 +14,42 @@ import {
   PackageCheck,
   X
 } from "lucide-react";
-import { mockCurrentRoute, mockErrands } from "../data/mockData";
+import { mockCurrentRoute } from "../data/mockData";
 import { toast } from "sonner";
-import { Location } from "../types";
-import { collection, addDoc } from "firebase/firestore";
+import { Errand, Location } from "../types";
+import { collection, addDoc, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../context/AuthContext";
 
 export default function CyclistActiveRoute() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [errands, setErrands] = useState<Errand[]>([]);
   const [routeStarted, setRouteStarted] = useState(false);
   const [acceptedErrands, setAcceptedErrands] = useState<string[]>([]);
   const [filterUrgency, setFilterUrgency] = useState<string>("all");
+
+  useEffect(() => {
+    const q = query(collection(db, "errands"), where("status", "==", "pending"));
+    const unsub = onSnapshot(q, (snap) => {
+      setErrands(
+        snap.docs.map((d) => ({
+          id: d.id,
+          deviation: 0,
+          matchScore: 50,
+          ...d.data(),
+        } as Errand))
+      );
+    });
+    return unsub;
+  }, []);
   const [startAddress, setStartAddress] = useState(mockCurrentRoute.startLocation.address);
   const [endAddress, setEndAddress] = useState(mockCurrentRoute.endLocation.address);
   const [startLocation, setStartLocation] = useState<Location>(mockCurrentRoute.startLocation);
   const [endLocation, setEndLocation] = useState<Location>(mockCurrentRoute.endLocation);
 
   const handleAcceptErrand = async (errandId: string) => {
-    const errand = mockErrands.find(e => e.id === errandId);
+    const errand = errands.find(e => e.id === errandId);
     if (!errand) return;
 
     setAcceptedErrands([...acceptedErrands, errandId]);
@@ -57,12 +73,12 @@ export default function CyclistActiveRoute() {
     toast.success(`Errand accepted! +$${total.toFixed(2)}`);
   };
 
-  const availableErrands = mockErrands
+  const availableErrands = errands
     .filter(e => !acceptedErrands.includes(e.id))
     .filter(e => filterUrgency === "all" || e.urgency === filterUrgency)
     .sort((a, b) => b.matchScore - a.matchScore);
 
-  const acceptedErrandObjects = mockErrands.filter(e => acceptedErrands.includes(e.id));
+  const acceptedErrandObjects = errands.filter(e => acceptedErrands.includes(e.id));
 
   const totalEarnings = acceptedErrandObjects.reduce((sum, e) => sum + e.payment + (e.tip || 0), 0);
 

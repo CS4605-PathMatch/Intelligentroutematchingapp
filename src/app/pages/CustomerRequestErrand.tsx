@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
 import {
@@ -14,9 +15,13 @@ import {
 import { toast } from "sonner";
 import PlacesAutocomplete from "../components/PlacesAutocomplete";
 import { Location } from "../types";
+import { collection, addDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { useAuth } from "../context/AuthContext";
 
 export default function CustomerRequestErrand() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [urgency, setUrgency] = useState<"flexible" | "soon" | "urgent">("soon");
   const [description, setDescription] = useState("");
   const [items, setItems] = useState("");
@@ -24,18 +29,51 @@ export default function CustomerRequestErrand() {
   const [dropoffAddress, setDropoffAddress] = useState("");
   const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
   const [dropoffLocation, setDropoffLocation] = useState<Location | null>(null);
-  const [estimatedPrice, setEstimatedPrice] = useState(8.50);
+  const [tip, setTip] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = () => {
+  const estimatedPrice = 8.50;
+
+  const handleSubmit = async () => {
     if (!description || !pickupAddress || !dropoffAddress) {
-      toast.error("Please fill in all required fields");
+      toast.error("Please fill in all required fields.");
       return;
     }
-    
-    toast.success("Errand request submitted! Finding nearby cyclists...");
-    setTimeout(() => {
-      navigate("/customer/track/e1");
-    }, 2000);
+    if (!pickupLocation || !dropoffLocation) {
+      toast.error("Please select locations from the dropdown.");
+      return;
+    }
+    if (!user) {
+      toast.error("You must be logged in to request an errand.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const errandRef = await addDoc(collection(db, "errands"), {
+        customerId: user.id,
+        customerName: user.name,
+        customerRating: user.rating,
+        description,
+        items: items ? items.split(",").map(i => i.trim()).filter(Boolean) : [],
+        pickupLocation,
+        dropoffLocation,
+        urgency,
+        payment: estimatedPrice,
+        tip: parseFloat(tip) || 0,
+        status: "pending",
+        requestedTime: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
+
+      toast.success("Errand requested! Finding nearby cyclists...");
+      setTimeout(() => navigate(`/customer/track/${errandRef.id}`), 1500);
+    } catch (err: any) {
+      toast.error("Failed to submit request. Please try again.");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const urgencyOptions = [
@@ -49,7 +87,7 @@ export default function CustomerRequestErrand() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
-          <button 
+          <button
             onClick={() => navigate("/customer")}
             className="flex items-center gap-2 text-gray-600"
           >
@@ -98,12 +136,11 @@ export default function CustomerRequestErrand() {
 
         {/* Pickup location */}
         <div className="space-y-2">
-          <Label htmlFor="pickup" className="flex items-center gap-2">
+          <Label className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-green-600" />
             Pickup location *
           </Label>
           <PlacesAutocomplete
-            id="pickup"
             value={pickupAddress}
             onChange={setPickupAddress}
             onPlaceSelect={(loc) => {
@@ -116,12 +153,11 @@ export default function CustomerRequestErrand() {
 
         {/* Dropoff location */}
         <div className="space-y-2">
-          <Label htmlFor="dropoff" className="flex items-center gap-2">
+          <Label className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-red-600" />
             Dropoff location *
           </Label>
           <PlacesAutocomplete
-            id="dropoff"
             value={dropoffAddress}
             onChange={setDropoffAddress}
             onPlaceSelect={(loc) => {
@@ -162,7 +198,7 @@ export default function CustomerRequestErrand() {
             <span className="text-gray-900">Estimated price</span>
             <div className="flex items-center gap-1 text-2xl text-green-600">
               <DollarSign className="w-6 h-6" />
-              <span>{estimatedPrice.toFixed(2)}</span>
+              <span>{(estimatedPrice + (parseFloat(tip) || 0)).toFixed(2)}</span>
             </div>
           </div>
           <div className="space-y-1 text-sm">
@@ -180,34 +216,26 @@ export default function CustomerRequestErrand() {
             </div>
             <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
               <span className="text-gray-600">Add tip (optional)</span>
-              <Input 
-                type="number" 
-                placeholder="0.00" 
+              <Input
+                type="number"
+                placeholder="0.00"
+                value={tip}
+                onChange={(e) => setTip(e.target.value)}
                 className="w-20 h-8 text-right"
                 step="0.50"
+                min="0"
               />
             </div>
           </div>
         </div>
 
-        {/* Payment method */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <div className="text-sm text-gray-600 mb-2">Payment method</div>
-          <div className="bg-white rounded-lg p-3 border border-gray-200 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded"></div>
-              <span className="text-gray-900">•••• 4242</span>
-            </div>
-            <button className="text-sm text-blue-600">Change</button>
-          </div>
-        </div>
-
         {/* Submit button */}
-        <Button 
+        <Button
           onClick={handleSubmit}
+          disabled={loading}
           className="w-full bg-green-600 hover:bg-green-700 h-12 text-lg"
         >
-          Request Errand
+          {loading ? "Submitting..." : "Request Errand"}
         </Button>
 
         <p className="text-xs text-gray-500 text-center">

@@ -1,190 +1,147 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Button } from "../components/ui/button";
-import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
-import MapView from "../components/MapView";
-import { 
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import {
   ArrowLeft,
-  Phone,
-  MessageCircle,
   MapPin,
-  Clock,
   Package,
-  Star,
-  Shield,
-  CheckCircle
+  Clock,
+  CheckCircle,
+  Loader2,
 } from "lucide-react";
-import { mockCyclist, mockLocations } from "../data/mockData";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { Errand } from "../types";
 
 export default function CustomerTrackDelivery() {
   const navigate = useNavigate();
   const { orderId } = useParams();
-  const [deliveryStatus, setDeliveryStatus] = useState<"matched" | "picked-up" | "in-transit" | "nearby" | "delivered">("in-transit");
-  const [estimatedArrival, setEstimatedArrival] = useState(12);
+  const [errand, setErrand] = useState<Errand | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate delivery progress
-    const timer = setTimeout(() => {
-      if (deliveryStatus === "in-transit") {
-        setDeliveryStatus("nearby");
-        setEstimatedArrival(3);
+    if (!orderId) return;
+    const unsub = onSnapshot(doc(db, "errands", orderId), (snap) => {
+      if (snap.exists()) {
+        setErrand({ id: snap.id, ...snap.data() } as Errand);
       }
-    }, 5000);
+      setLoading(false);
+    });
+    return unsub;
+  }, [orderId]);
 
-    return () => clearTimeout(timer);
-  }, [deliveryStatus]);
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+      </div>
+    );
+  }
 
-  const statusConfig = {
-    matched: { label: "Matched", color: "bg-blue-100 text-blue-700", icon: CheckCircle },
-    "picked-up": { label: "Picked Up", color: "bg-orange-100 text-orange-700", icon: Package },
-    "in-transit": { label: "In Transit", color: "bg-purple-100 text-purple-700", icon: MapPin },
-    nearby: { label: "Nearby", color: "bg-green-100 text-green-700", icon: MapPin },
-    delivered: { label: "Delivered", color: "bg-green-100 text-green-700", icon: CheckCircle },
-  };
+  if (!errand) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
+        <p className="text-gray-600">Errand not found.</p>
+        <Button onClick={() => navigate("/customer")}>Back to Dashboard</Button>
+      </div>
+    );
+  }
 
-  const currentStatus = statusConfig[deliveryStatus];
+  const isPending = errand.status === "pending";
 
   return (
     <div className="min-h-screen bg-gray-50 pb-6">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
-          <button 
+          <button
             onClick={() => navigate("/customer")}
             className="flex items-center gap-2 text-gray-600"
           >
             <ArrowLeft className="w-5 h-5" />
             <span>Back</span>
           </button>
-          <h1 className="text-gray-900">Track Delivery</h1>
-          <div className="w-16"></div>
+          <h1 className="text-gray-900">Track Errand</h1>
+          <div className="w-16" />
         </div>
       </div>
 
-      {/* Live map */}
-      <div className="p-4">
-        <MapView 
-          startLocation={mockLocations.eastside}
-          currentLocation={mockLocations.midtown}
-          endLocation={mockLocations.parkside}
-          className="h-80"
-        />
-      </div>
-
-      <div className="px-4 pb-6 space-y-4">
+      <div className="px-4 pt-4 pb-6 space-y-4 max-w-2xl mx-auto">
         {/* Status card */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <Badge className={currentStatus.color}>
-              <currentStatus.icon className="w-3 h-3 mr-1" />
-              {currentStatus.label}
-            </Badge>
-            <div className="text-right">
-              <div className="text-sm text-gray-600">ETA</div>
-              <div className="text-xl text-gray-900">{estimatedArrival} min</div>
+        <Card className="p-6">
+          {isPending ? (
+            <div className="flex flex-col items-center text-center gap-4 py-4">
+              <div className="bg-green-100 rounded-full p-4">
+                <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
+              </div>
+              <div>
+                <div className="text-lg text-gray-900 mb-1">Finding a cyclist...</div>
+                <div className="text-sm text-gray-500">
+                  We're matching your errand with a nearby cyclist. This usually takes just a few minutes.
+                </div>
+              </div>
+              <Badge className="bg-yellow-100 text-yellow-700">Pending</Badge>
             </div>
-          </div>
-
-          {/* Progress steps */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                deliveryStatus !== "matched" ? "bg-green-600 text-white" : "bg-gray-200 text-gray-500"
-              }`}>
-                {deliveryStatus !== "matched" ? "✓" : "1"}
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between mb-2">
+                <Badge className="bg-blue-100 text-blue-700">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Cyclist Matched
+                </Badge>
               </div>
-              <div className="flex-1">
-                <div className="text-gray-900">Cyclist matched</div>
-                <div className="text-sm text-gray-600">Alex is on the way to pickup</div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                ["in-transit", "nearby", "delivered"].includes(deliveryStatus) ? "bg-green-600 text-white" : "bg-gray-200 text-gray-500"
-              }`}>
-                {["in-transit", "nearby", "delivered"].includes(deliveryStatus) ? "✓" : "2"}
-              </div>
-              <div className="flex-1">
-                <div className="text-gray-900">Item picked up</div>
-                <div className="text-sm text-gray-600">Heading to your location</div>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center">✓</div>
+                <div>
+                  <div className="text-gray-900">Cyclist matched</div>
+                  <div className="text-sm text-gray-600">On the way to pickup</div>
+                </div>
               </div>
             </div>
-
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                deliveryStatus === "delivered" ? "bg-green-600 text-white" : "bg-gray-200 text-gray-500"
-              }`}>
-                3
-              </div>
-              <div className="flex-1">
-                <div className="text-gray-900">Delivered</div>
-                <div className="text-sm text-gray-600">At your doorstep</div>
-              </div>
-            </div>
-          </div>
+          )}
         </Card>
 
-        {/* Cyclist info */}
+        {/* Errand details */}
         <Card className="p-4">
-          <div className="flex items-center gap-3 mb-4">
-            <img 
-              src={mockCyclist.avatar}
-              alt={mockCyclist.name}
-              className="w-12 h-12 rounded-full"
-            />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-gray-900">{mockCyclist.name}</span>
-                {mockCyclist.verified && (
-                  <Shield className="w-4 h-4 text-blue-600" />
-                )}
-              </div>
-              <div className="flex items-center gap-1 text-sm text-gray-600">
-                <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                <span>{mockCyclist.rating}</span>
-                <span className="mx-1">•</span>
-                <span>{mockCyclist.totalTrips} deliveries</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1">
-              <Phone className="w-4 h-4 mr-2" />
-              Call
-            </Button>
-            <Button variant="outline" className="flex-1">
-              <MessageCircle className="w-4 h-4 mr-2" />
-              Message
-            </Button>
-          </div>
-        </Card>
-
-        {/* Delivery details */}
-        <Card className="p-4">
-          <h3 className="text-gray-900 mb-3">Delivery Details</h3>
+          <h3 className="text-gray-900 mb-3">Errand Details</h3>
           <div className="space-y-3 text-sm">
             <div className="flex items-start gap-2">
+              <Package className="w-4 h-4 mt-0.5 text-gray-500 flex-shrink-0" />
+              <div>
+                <div className="text-gray-500">Description</div>
+                <div className="text-gray-900">{errand.description}</div>
+              </div>
+            </div>
+            {errand.items?.length > 0 && (
+              <div className="flex items-start gap-2">
+                <Package className="w-4 h-4 mt-0.5 text-gray-500 flex-shrink-0" />
+                <div>
+                  <div className="text-gray-500">Items</div>
+                  <div className="text-gray-900">{errand.items.join(", ")}</div>
+                </div>
+              </div>
+            )}
+            <div className="flex items-start gap-2">
               <MapPin className="w-4 h-4 mt-0.5 text-green-600 flex-shrink-0" />
-              <div className="flex-1">
-                <div className="text-gray-600">Pickup</div>
-                <div className="text-gray-900">{mockLocations.eastside.address}</div>
+              <div>
+                <div className="text-gray-500">Pickup</div>
+                <div className="text-gray-900">{errand.pickupLocation.address}</div>
               </div>
             </div>
             <div className="flex items-start gap-2">
               <MapPin className="w-4 h-4 mt-0.5 text-red-600 flex-shrink-0" />
-              <div className="flex-1">
-                <div className="text-gray-600">Dropoff</div>
-                <div className="text-gray-900">{mockLocations.parkside.address}</div>
+              <div>
+                <div className="text-gray-500">Dropoff</div>
+                <div className="text-gray-900">{errand.dropoffLocation.address}</div>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Package className="w-4 h-4 mt-0.5 text-gray-600 flex-shrink-0" />
-              <div className="flex-1">
-                <div className="text-gray-600">Items</div>
-                <div className="text-gray-900">Prescription medication, Receipt required</div>
+              <Clock className="w-4 h-4 mt-0.5 text-gray-500 flex-shrink-0" />
+              <div>
+                <div className="text-gray-500">Urgency</div>
+                <div className="text-gray-900 capitalize">{errand.urgency}</div>
               </div>
             </div>
           </div>
@@ -196,34 +153,21 @@ export default function CustomerTrackDelivery() {
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between text-gray-600">
               <span>Delivery fee</span>
-              <span>$8.50</span>
+              <span>${errand.payment.toFixed(2)}</span>
             </div>
-            <div className="flex items-center justify-between text-gray-600">
-              <span>Tip</span>
-              <span>$2.00</span>
-            </div>
+            {errand.tip > 0 && (
+              <div className="flex items-center justify-between text-gray-600">
+                <span>Tip</span>
+                <span>${errand.tip.toFixed(2)}</span>
+              </div>
+            )}
             <div className="pt-2 border-t border-gray-200 flex items-center justify-between text-gray-900">
               <span>Total</span>
-              <span className="text-lg">$10.50</span>
+              <span className="text-lg">${(errand.payment + (errand.tip ?? 0)).toFixed(2)}</span>
             </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-2 text-sm text-gray-600">
-            <div className="w-8 h-5 bg-gradient-to-r from-blue-600 to-purple-600 rounded"></div>
-            <span>•••• 4242</span>
           </div>
         </Card>
 
-        {/* Safety notice */}
-        {deliveryStatus === "nearby" && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="text-green-900 mb-1">Cyclist is nearby!</div>
-            <div className="text-sm text-green-700">
-              Please be ready to receive your delivery. You'll be asked to confirm receipt in the app.
-            </div>
-          </div>
-        )}
-
-        {/* Support button */}
         <Button variant="outline" className="w-full">
           Need Help?
         </Button>

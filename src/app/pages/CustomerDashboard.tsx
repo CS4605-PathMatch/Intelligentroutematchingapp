@@ -14,10 +14,12 @@ import {
   Clock,
   CheckCircle
 } from "lucide-react";
-import { mockCustomer, mockCustomerOrders } from "../data/mockData";
+import { mockCustomerOrders } from "../data/mockData";
+import { useAuth } from "../context/AuthContext";
 
 export default function CustomerDashboard() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
 
   return (
@@ -26,23 +28,23 @@ export default function CustomerDashboard() {
       <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 pb-8 rounded-b-3xl shadow-lg">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <img 
-              src={mockCustomer.avatar} 
-              alt={mockCustomer.name}
+            <img
+              src={user?.avatar}
+              alt={user?.name}
               className="w-12 h-12 rounded-full border-2 border-white"
             />
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-lg">Hello, {mockCustomer.name.split(' ')[0]}</span>
-                {mockCustomer.verified && (
+                <span className="text-lg">Hello, {user?.name?.split(' ')[0]}</span>
+                {user?.verified && (
                   <Badge className="bg-white text-green-600 text-xs">Verified</Badge>
                 )}
               </div>
               <div className="flex items-center gap-1 text-sm text-green-100">
                 <Star className="w-3 h-3 fill-white" />
-                <span>{mockCustomer.rating}</span>
+                <span>{user?.rating}</span>
                 <span className="mx-1">•</span>
-                <span>{mockCustomer.totalTrips} orders</span>
+                <span>{user?.totalTrips} orders</span>
               </div>
             </div>
           </div>
@@ -67,8 +69,8 @@ export default function CustomerDashboard() {
       {/* Menu Dropdown */}
       {showMenu && (
         <div className="absolute top-20 right-6 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-10">
-          <button 
-            onClick={() => navigate(`/profile/${mockCustomer.id}`)}
+          <button
+            onClick={() => navigate(`/profile/${user?.id}`)}
             className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition"
           >
             <User className="w-5 h-5 text-gray-600" />
@@ -78,8 +80,8 @@ export default function CustomerDashboard() {
             <Settings className="w-5 h-5 text-gray-600" />
             <span>Settings</span>
           </button>
-          <button 
-            onClick={() => navigate("/")}
+          <button
+            onClick={() => logout().then(() => navigate("/"))}
             className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition text-red-600"
           >
             <LogOut className="w-5 h-5" />
