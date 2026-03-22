@@ -282,7 +282,7 @@ export default function CyclistActiveRoute() {
               <div className="text-lg text-gray-900">Total: <span className="text-green-600">${totalEarnings.toFixed(2)}</span></div>
             </div>
             <Button
-              onClick={() => {
+              onClick={async () => {
                 const origin = encodeURIComponent(startAddress);
                 const destination = encodeURIComponent(endAddress);
 
@@ -294,6 +294,16 @@ export default function CyclistActiveRoute() {
                 const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=optimize:true|${stops}&travelmode=bicycling`;
                 window.open(url, "_blank");
                 setRouteStarted(true);
+
+                // Save cyclist's start location to each errand so customer can see the route
+                await Promise.all(
+                  queuedErrands.map(e =>
+                    updateDoc(doc(db, "errands", e.id), {
+                      cyclistStartLocation: startLocation,
+                      tripStartedAt: new Date().toISOString(),
+                    })
+                  )
+                );
               }}
               className="bg-green-600 hover:bg-green-700 h-12 px-6 text-base"
             >

@@ -18,6 +18,7 @@ import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Errand } from "../types";
 import { toast } from "sonner";
+import MapView from "../components/MapView";
 
 export default function CustomerTrackDelivery() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export default function CustomerTrackDelivery() {
   const [errand, setErrand] = useState<Errand | null>(null);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
+  const [eta, setEta] = useState<string | null>(null);
 
   useEffect(() => {
     if (!orderId) return;
@@ -34,6 +36,34 @@ export default function CustomerTrackDelivery() {
     });
     return unsub;
   }, [orderId]);
+
+  // Calculate ETA using Google Directions when errand is matched and has locations
+  useEffect(() => {
+    if (!errand || errand.status !== "matched") return;
+    const origin = (errand as any).cyclistStartLocation ?? errand.pickupLocation;
+    const destination = errand.dropoffLocation;
+    if (!origin || !destination || !window.google) return;
+
+    const service = new google.maps.DirectionsService();
+    service.route(
+      {
+        origin: { lat: origin.lat, lng: origin.lng },
+        destination: { lat: destination.lat, lng: destination.lng },
+        waypoints: (errand as any).cyclistStartLocation
+          ? [{ location: { lat: errand.pickupLocation.lat, lng: errand.pickupLocation.lng }, stopover: true }]
+          : [],
+        travelMode: google.maps.TravelMode.BICYCLING,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK && result) {
+          const legs = result.routes[0].legs;
+          const totalSeconds = legs.reduce((sum, leg) => sum + (leg.duration?.value ?? 0), 0);
+          const minutes = Math.round(totalSeconds / 60);
+          setEta(`${minutes} min`);
+        }
+      }
+    );
+  }, [errand?.status, (errand as any)?.cyclistStartLocation]);
 
   const handleMarkDelivered = async () => {
     if (!orderId || !errand) return;
@@ -91,6 +121,18 @@ export default function CustomerTrackDelivery() {
         </div>
       </div>
 
+      {/* Live map — shown when matched */}
+      {(isMatched || isCompleted) && (
+        <div className="px-4 pt-4">
+          <MapView
+            startLocation={(errand as any).cyclistStartLocation ?? errand.pickupLocation}
+            endLocation={errand.dropoffLocation}
+            waypoints={(errand as any).cyclistStartLocation ? [errand.pickupLocation] : []}
+            className="h-64"
+          />
+        </div>
+      )}
+
       <div className="px-4 pt-4 pb-6 space-y-4 max-w-2xl mx-auto">
 
         {/* Status card */}
@@ -115,7 +157,15 @@ export default function CustomerTrackDelivery() {
                   <CheckCircle className="w-3 h-3 mr-1" />
                   Cyclist matched
                 </Badge>
-                <Badge className="bg-orange-100 text-orange-700">Payment held</Badge>
+                <div className="flex items-center gap-2">
+                  {eta && (
+                    <div className="text-right">
+                      <div className="text-xs text-gray-500">ETA</div>
+                      <div className="text-lg text-gray-900">{eta}</div>
+                    </div>
+                  )}
+                  <Badge className="bg-orange-100 text-orange-700">Payment held</Badge>
+                </div>
               </div>
 
               {/* Progress steps */}
