@@ -14,13 +14,26 @@ import {
   Clock,
   CheckCircle
 } from "lucide-react";
-import { mockCustomerOrders } from "../data/mockData";
 import { useAuth } from "../context/AuthContext";
+import { useEffect, useState } from "react";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { Errand } from "../types";
 
 export default function CustomerDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
+  const [orders, setOrders] = useState<Errand[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, "errands"), where("customerId", "==", user.id));
+    return onSnapshot(q, (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Errand));
+      setOrders(data.sort((a, b) => ((b as any).createdAt ?? "").localeCompare((a as any).createdAt ?? "")));
+    });
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 relative">
@@ -93,45 +106,59 @@ export default function CustomerDashboard() {
       {/* Main content */}
       <div className="p-6 space-y-6">
         {/* Active orders */}
-        <div>
-          <h2 className="text-gray-900 mb-3">Active Orders</h2>
-          <Card className="p-4 bg-gradient-to-r from-green-50 to-blue-50 border-green-200">
-            <div className="flex items-center gap-3">
-              <Package className="w-12 h-12 text-green-600" />
-              <div className="flex-1">
-                <p className="text-gray-900">No active deliveries</p>
-                <p className="text-sm text-gray-600">Request an errand to get started</p>
-              </div>
+        {orders.filter(o => o.status === "pending" || o.status === "matched").length > 0 && (
+          <div>
+            <h2 className="text-gray-900 mb-3">Active Orders</h2>
+            <div className="space-y-3">
+              {orders.filter(o => o.status === "pending" || o.status === "matched").map(order => (
+                <Card
+                  key={order.id}
+                  className="p-4 bg-gradient-to-r from-green-50 to-blue-50 border-green-200 cursor-pointer"
+                  onClick={() => navigate(`/customer/track/${order.id}`)}
+                >
+                  <div className="flex items-start justify-between mb-1">
+                    <span className="text-gray-900">{order.description}</span>
+                    <Badge className={order.status === "matched" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}>
+                      {order.status === "matched" ? "Matched" : "Pending"}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-gray-600">${(order.payment + (order.tip ?? 0)).toFixed(2)}</p>
+                </Card>
+              ))}
             </div>
-          </Card>
-        </div>
+          </div>
+        )}
 
         {/* Recent orders */}
         <div>
-          <h2 className="text-gray-900 mb-3">Recent Orders</h2>
-          <div className="space-y-3">
-            {mockCustomerOrders.map((order) => (
-              <Card key={order.id} className="p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-gray-900">{order.cyclistName}</span>
-                      <Badge className="bg-green-100 text-green-700 text-xs">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Completed
-                      </Badge>
+          <h2 className="text-gray-900 mb-3">Order History</h2>
+          {orders.filter(o => o.status === "completed").length === 0 ? (
+            <Card className="p-4 text-center text-gray-500 text-sm">No completed orders yet.</Card>
+          ) : (
+            <div className="space-y-3">
+              {orders.filter(o => o.status === "completed").map(order => (
+                <Card key={order.id} className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-gray-900">{(order as any).cyclistName ?? "Cyclist"}</span>
+                        <Badge className="bg-green-100 text-green-700 text-xs">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Completed
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-600">{order.description}</p>
                     </div>
-                    <p className="text-sm text-gray-600">{order.description}</p>
+                    <span className="text-gray-900">${(order.payment + (order.tip ?? 0)).toFixed(2)}</span>
                   </div>
-                  <span className="text-gray-900">${order.amount.toFixed(2)}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Clock className="w-3 h-3" />
-                  <span>{order.date}</span>
-                </div>
-              </Card>
-            ))}
-          </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Clock className="w-3 h-3" />
+                    <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* How it works */}

@@ -17,7 +17,7 @@ import {
 import { mockCurrentRoute } from "../data/mockData";
 import { toast } from "sonner";
 import { Errand, Location } from "../types";
-import { collection, addDoc, query, where, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../context/AuthContext";
 
@@ -56,16 +56,33 @@ export default function CyclistActiveRoute() {
 
     if (user) {
       try {
-        await addDoc(collection(db, "users", user.id, "rides"), {
-          earnings: errand.payment,
-          tip: errand.tip ?? 0,
-          completedAt: new Date().toISOString(),
-          description: errand.description,
-          from: errand.pickupLocation.address,
-          to: errand.dropoffLocation.address,
-        });
+        await Promise.all([
+          // Mark errand as matched with this cyclist
+          updateDoc(doc(db, "errands", errandId), {
+            status: "matched",
+            cyclistId: user.id,
+            cyclistName: user.name,
+            cyclistAvatar: user.avatar,
+            cyclistRating: user.rating,
+            acceptedAt: new Date().toISOString(),
+          }),
+          // Record earnings in cyclist's ride history
+          addDoc(collection(db, "users", user.id, "rides"), {
+            errandId,
+            earnings: errand.payment,
+            tip: errand.tip ?? 0,
+            completedAt: new Date().toISOString(),
+            description: errand.description,
+            from: errand.pickupLocation.address,
+            to: errand.dropoffLocation.address,
+            status: "in-progress",
+          }),
+        ]);
       } catch (err) {
-        console.error("Failed to save ride:", err);
+        console.error("Failed to accept errand:", err);
+        toast.error("Failed to accept errand.");
+        setAcceptedErrands(prev => prev.filter(id => id !== errandId));
+        return;
       }
     }
 
