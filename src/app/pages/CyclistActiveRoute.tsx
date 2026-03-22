@@ -26,7 +26,7 @@ export default function CyclistActiveRoute() {
   const { user } = useAuth();
   const [errands, setErrands] = useState<Errand[]>([]);
   const [routeStarted, setRouteStarted] = useState(false);
-  const [acceptedErrands, setAcceptedErrands] = useState<string[]>([]);
+  const [queuedErrands, setQueuedErrands] = useState<Errand[]>([]);
   const [filterUrgency, setFilterUrgency] = useState<string>("all");
 
   useEffect(() => {
@@ -52,7 +52,8 @@ export default function CyclistActiveRoute() {
     const errand = errands.find(e => e.id === errandId);
     if (!errand) return;
 
-    setAcceptedErrands([...acceptedErrands, errandId]);
+    // Store full errand object now — it will disappear from pending list after Firestore update
+    setQueuedErrands(prev => [...prev, errand]);
 
     if (user) {
       try {
@@ -81,7 +82,7 @@ export default function CyclistActiveRoute() {
       } catch (err) {
         console.error("Failed to accept errand:", err);
         toast.error("Failed to accept errand.");
-        setAcceptedErrands(prev => prev.filter(id => id !== errandId));
+        setQueuedErrands(prev => prev.filter(e => e.id !== errandId));
         return;
       }
     }
@@ -90,21 +91,21 @@ export default function CyclistActiveRoute() {
     toast.success(`Errand accepted! +$${total.toFixed(2)}`);
   };
 
+  const queuedIds = new Set(queuedErrands.map(e => e.id));
+
   const availableErrands = errands
-    .filter(e => !acceptedErrands.includes(e.id))
+    .filter(e => !queuedIds.has(e.id))
     .filter(e => filterUrgency === "all" || e.urgency === filterUrgency)
     .sort((a, b) => b.matchScore - a.matchScore);
 
-  const acceptedErrandObjects = errands.filter(e => acceptedErrands.includes(e.id));
-
-  const totalEarnings = acceptedErrandObjects.reduce((sum, e) => sum + e.payment + (e.tip || 0), 0);
+  const totalEarnings = queuedErrands.reduce((sum, e) => sum + e.payment + (e.tip || 0), 0);
 
   const handleRemoveErrand = (errandId: string) => {
-    setAcceptedErrands(acceptedErrands.filter(id => id !== errandId));
+    setQueuedErrands(prev => prev.filter(e => e.id !== errandId));
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-6" style={{ paddingBottom: acceptedErrandObjects.length > 0 && !routeStarted ? "120px" : "24px" }}>
+    <div className="min-h-screen bg-gray-50 pb-6" style={{ paddingBottom: queuedErrands.length > 0 && !routeStarted ? "120px" : "24px" }}>
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
@@ -176,16 +177,16 @@ export default function CyclistActiveRoute() {
             </div>
           </div>
 
-          {acceptedErrandObjects.length > 0 && (
+          {queuedErrands.length > 0 && (
             <div className="pt-3 border-t border-gray-100 space-y-2">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-sm text-gray-600 flex items-center gap-1">
                   <PackageCheck className="w-4 h-4 text-green-600" />
-                  {acceptedErrandObjects.length} job{acceptedErrandObjects.length > 1 ? "s" : ""} queued
+                  {queuedErrands.length} job{queuedErrands.length > 1 ? "s" : ""} queued
                 </span>
                 <span className="text-green-600">${totalEarnings.toFixed(2)}</span>
               </div>
-              {acceptedErrandObjects.map((e, i) => (
+              {queuedErrands.map((e, i) => (
                 <div key={e.id} className="flex items-start gap-2 bg-green-50 rounded-lg p-2 text-sm">
                   <div className="bg-green-600 text-white w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-xs mt-0.5">
                     {i + 1}
@@ -273,11 +274,11 @@ export default function CyclistActiveRoute() {
       </div>
 
       {/* Sticky Start Trip bar */}
-      {acceptedErrandObjects.length > 0 && !routeStarted && (
+      {queuedErrands.length > 0 && !routeStarted && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-xl">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <div className="text-sm text-gray-500">{acceptedErrandObjects.length} job{acceptedErrandObjects.length > 1 ? "s" : ""} · {acceptedErrandObjects.length * 2 + 2} stops</div>
+              <div className="text-sm text-gray-500">{queuedErrands.length} job{queuedErrands.length > 1 ? "s" : ""} · {queuedErrands.length * 2 + 2} stops</div>
               <div className="text-lg text-gray-900">Total: <span className="text-green-600">${totalEarnings.toFixed(2)}</span></div>
             </div>
             <Button
@@ -285,7 +286,7 @@ export default function CyclistActiveRoute() {
                 const origin = encodeURIComponent(startAddress);
                 const destination = encodeURIComponent(endAddress);
 
-                const stops = acceptedErrandObjects
+                const stops = queuedErrands
                   .flatMap(e => [e.pickupLocation.address, e.dropoffLocation.address])
                   .map(encodeURIComponent)
                   .join("|");
