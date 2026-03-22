@@ -14,7 +14,6 @@ import {
   PackageCheck,
   X
 } from "lucide-react";
-import { mockCurrentRoute } from "../data/mockData";
 import { toast } from "sonner";
 import { Errand, Location } from "../types";
 import { collection, addDoc, updateDoc, doc, query, where, onSnapshot } from "firebase/firestore";
@@ -43,10 +42,10 @@ export default function CyclistActiveRoute() {
     });
     return unsub;
   }, []);
-  const [startAddress, setStartAddress] = useState(mockCurrentRoute.startLocation.address);
-  const [endAddress, setEndAddress] = useState(mockCurrentRoute.endLocation.address);
-  const [startLocation, setStartLocation] = useState<Location>(mockCurrentRoute.startLocation);
-  const [endLocation, setEndLocation] = useState<Location>(mockCurrentRoute.endLocation);
+  const [startAddress, setStartAddress] = useState("");
+  const [endAddress, setEndAddress] = useState("");
+  const [startLocation, setStartLocation] = useState<Location | null>(null);
+  const [endLocation, setEndLocation] = useState<Location | null>(null);
 
   const handleAcceptErrand = async (errandId: string) => {
     const errand = errands.find(e => e.id === errandId);
@@ -124,8 +123,8 @@ export default function CyclistActiveRoute() {
       {/* Map */}
       <div className="p-4">
         <MapView
-          startLocation={startLocation}
-          endLocation={endLocation}
+          startLocation={startLocation ?? undefined}
+          endLocation={endLocation ?? undefined}
           waypoints={queuedErrands.flatMap(e => [e.pickupLocation, e.dropoffLocation])}
           className="h-64"
         />
@@ -283,6 +282,10 @@ export default function CyclistActiveRoute() {
             </div>
             <Button
               onClick={async () => {
+                if (!startLocation || !endLocation) {
+                  toast.error("Please set your start and end location first.");
+                  return;
+                }
                 const origin = encodeURIComponent(startAddress);
                 const destination = encodeURIComponent(endAddress);
 
