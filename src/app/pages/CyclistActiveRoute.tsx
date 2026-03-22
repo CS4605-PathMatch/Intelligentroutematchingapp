@@ -126,7 +126,7 @@ export default function CyclistActiveRoute() {
         <MapView
           startLocation={startLocation}
           endLocation={endLocation}
-          waypoints={mockCurrentRoute.waypoints}
+          waypoints={queuedErrands.flatMap(e => [e.pickupLocation, e.dropoffLocation])}
           className="h-64"
         />
       </div>
