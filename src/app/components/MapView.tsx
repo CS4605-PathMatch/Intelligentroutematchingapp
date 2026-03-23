@@ -3,6 +3,7 @@ import {
   GoogleMap,
   DirectionsRenderer,
   MarkerF,
+  CircleF,
 } from "@react-google-maps/api";
 import { Location } from "../types";
 
@@ -11,6 +12,7 @@ interface MapViewProps {
   endLocation?: Location;
   currentLocation?: Location;
   waypoints?: Location[];
+  radiusKm?: number;
   className?: string;
 }
 
@@ -23,6 +25,7 @@ export default function MapView({
   endLocation,
   currentLocation,
   waypoints = [],
+  radiusKm,
   className = "",
 }: MapViewProps) {
   const [directions, setDirections] =
@@ -61,6 +64,11 @@ export default function MapView({
     ? { lat: startLocation.lat, lng: startLocation.lng }
     : defaultCenter;
 
+  // Zoom out enough to show the radius circle (approx: each zoom level halves the view)
+  const zoomForRadius = radiusKm
+    ? Math.round(14 - Math.log2(radiusKm))
+    : 13;
+
   const leg = directions?.routes[0]?.legs[0];
   const duration = leg?.duration?.text ?? null;
   const distance = leg?.distance?.text ?? null;
@@ -70,7 +78,7 @@ export default function MapView({
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
         center={center}
-        zoom={13}
+        zoom={zoomForRadius}
         options={{
           disableDefaultUI: false,
           zoomControl: true,
@@ -122,6 +130,20 @@ export default function MapView({
             }}
           />
         ))}
+
+        {radiusKm && startLocation && (
+          <CircleF
+            center={{ lat: startLocation.lat, lng: startLocation.lng }}
+            radius={radiusKm * 1000}
+            options={{
+              fillColor: "#2563eb",
+              fillOpacity: 0.08,
+              strokeColor: "#2563eb",
+              strokeOpacity: 0.4,
+              strokeWeight: 2,
+            }}
+          />
+        )}
       </GoogleMap>
 
       {(duration || distance) && (

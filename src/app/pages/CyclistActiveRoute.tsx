@@ -12,13 +12,29 @@ import {
   Filter,
   AlertCircle,
   PackageCheck,
-  X
+  X,
+  RotateCcw,
+  ArrowRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Errand, Location } from "../types";
 import { collection, addDoc, updateDoc, doc, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../context/AuthContext";
+
+function haversineKm(a: Location, b: Location): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.lat * Math.PI) / 180) *
+      Math.cos((b.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+type RouteMode = "point-to-point" | "round-trip";
 
 export default function CyclistActiveRoute() {
   const navigate = useNavigate();
@@ -27,6 +43,8 @@ export default function CyclistActiveRoute() {
   const [routeStarted, setRouteStarted] = useState(false);
   const [queuedErrands, setQueuedErrands] = useState<Errand[]>([]);
   const [filterUrgency, setFilterUrgency] = useState<string>("all");
+  const [routeMode, setRouteMode] = useState<RouteMode>("point-to-point");
+  const [roundTripKm, setRoundTripKm] = useState(10);
 
   useEffect(() => {
     const q = query(collection(db, "errands"), where("status", "==", "pending"));
@@ -95,6 +113,22 @@ export default function CyclistActiveRoute() {
   const availableErrands = errands
     .filter(e => !queuedIds.has(e.id))
     .filter(e => filterUrgency === "all" || e.urgency === filterUrgency)
+    .filter(e => {
+      if (routeMode !== "round-trip" || !startLocation) return true;
+      const detour =
+        haversineKm(startLocation, e.pickupLocation) +
+        haversineKm(e.pickupLocation, e.dropoffLocation) +
+        haversineKm(e.dropoffLocation, startLocation);
+      return detour <= roundTripKm;
+    })
+    .map(e => {
+      if (routeMode !== "round-trip" || !startLocation) return e;
+      const detour =
+        haversineKm(startLocation, e.pickupLocation) +
+        haversineKm(e.pickupLocation, e.dropoffLocation) +
+        haversineKm(e.dropoffLocation, startLocation);
+      return { ...e, deviation: Math.round(detour * 10) / 10, matchScore: Math.round((1 - detour / roundTripKm) * 100) };
+    })
     .sort((a, b) => b.matchScore - a.matchScore);
 
   const totalEarnings = queuedErrands.reduce((sum, e) => sum + e.payment + (e.tip || 0), 0);
@@ -120,12 +154,45 @@ export default function CyclistActiveRoute() {
         </div>
       </div>
 
+      {/* Mode toggle */}
+      <div className="px-4 pt-4">
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+          <button
+            onClick={() => setRouteMode("point-to-point")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm transition ${
+              routeMode === "point-to-point"
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-500"
+            }`}
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+            Point to Point
+          </button>
+          <button
+            onClick={() => setRouteMode("round-trip")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm transition ${
+              routeMode === "round-trip"
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-500"
+            }`}
+          >
+            <RotateCcw className="w-4 h-4" />
+            Round Trip
+          </button>
+        </div>
+      </div>
+
       {/* Map */}
       <div className="p-4">
         <MapView
           startLocation={startLocation ?? undefined}
-          endLocation={endLocation ?? undefined}
+          endLocation={
+            routeMode === "point-to-point"
+              ? (endLocation ?? undefined)
+              : (queuedErrands.length > 0 ? startLocation ?? undefined : undefined)
+          }
           waypoints={queuedErrands.flatMap(e => [e.pickupLocation, e.dropoffLocation])}
+          radiusKm={routeMode === "round-trip" && startLocation ? roundTripKm / 2 : undefined}
           className="h-64"
         />
       </div>
@@ -147,7 +214,7 @@ export default function CyclistActiveRoute() {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0"></div>
               <div className="flex-1">
-                <div className="text-xs text-gray-500 mb-1">From</div>
+                <div className="text-xs text-gray-500 mb-1">Start</div>
                 <PlacesAutocomplete
                   value={startAddress}
                   onChange={setStartAddress}
@@ -159,21 +226,46 @@ export default function CyclistActiveRoute() {
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-red-600 rounded-full flex-shrink-0"></div>
-              <div className="flex-1">
-                <div className="text-xs text-gray-500 mb-1">To</div>
-                <PlacesAutocomplete
-                  value={endAddress}
-                  onChange={setEndAddress}
-                  onPlaceSelect={(loc) => {
-                    setEndLocation(loc);
-                    setEndAddress(loc.address);
-                  }}
-                  placeholder="Search destination"
-                />
+
+            {routeMode === "point-to-point" && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-red-600 rounded-full flex-shrink-0"></div>
+                <div className="flex-1">
+                  <div className="text-xs text-gray-500 mb-1">To</div>
+                  <PlacesAutocomplete
+                    value={endAddress}
+                    onChange={setEndAddress}
+                    onPlaceSelect={(loc) => {
+                      setEndLocation(loc);
+                      setEndAddress(loc.address);
+                    }}
+                    placeholder="Search destination"
+                  />
+                </div>
               </div>
-            </div>
+            )}
+
+            {routeMode === "round-trip" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Max round trip distance</span>
+                  <span className="text-blue-600">{roundTripKm} km</span>
+                </div>
+                <input
+                  type="range"
+                  min={2}
+                  max={50}
+                  step={1}
+                  value={roundTripKm}
+                  onChange={e => setRoundTripKm(Number(e.target.value))}
+                  className="w-full accent-blue-600"
+                />
+                <div className="flex justify-between text-xs text-gray-400">
+                  <span>2 km</span>
+                  <span>50 km</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {queuedErrands.length > 0 && (
@@ -216,7 +308,7 @@ export default function CyclistActiveRoute() {
           <div>
             <h2 className="text-gray-900">Matched Errands</h2>
             <p className="text-sm text-gray-600">
-              {availableErrands.length} errands along your route
+              {availableErrands.length} errands {routeMode === "round-trip" ? `within ${roundTripKm} km round trip` : "along your route"}
             </p>
           </div>
           <button className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm">
@@ -248,7 +340,9 @@ export default function CyclistActiveRoute() {
           <div className="text-sm">
             <div className="text-blue-900 mb-1">Smart Matching Algorithm</div>
             <div className="text-blue-700">
-              Errands are ranked by proximity to your route, timing compatibility, and minimal detour distance. Higher match scores mean better alignment with your path.
+              {routeMode === "round-trip"
+                ? `Errands are filtered to those whose full round-trip (pickup + dropoff + return) fits within your ${roundTripKm} km limit. Higher scores mean less total distance.`
+                : "Errands are ranked by proximity to your route, timing compatibility, and minimal detour distance. Higher match scores mean better alignment with your path."}
             </div>
           </div>
         </div>
@@ -282,19 +376,27 @@ export default function CyclistActiveRoute() {
             </div>
             <Button
               onClick={async () => {
-                if (!startLocation || !endLocation) {
-                  toast.error("Please set your start and end location first.");
+                if (!startLocation) {
+                  toast.error("Please set your start location first.");
+                  return;
+                }
+                if (routeMode === "point-to-point" && !endLocation) {
+                  toast.error("Please set your end location first.");
                   return;
                 }
                 const origin = encodeURIComponent(startAddress);
-                const destination = encodeURIComponent(endAddress);
+                const destination = routeMode === "round-trip"
+                  ? encodeURIComponent(startAddress)
+                  : encodeURIComponent(endAddress);
 
                 const stops = queuedErrands
                   .flatMap(e => [e.pickupLocation.address, e.dropoffLocation.address])
                   .map(encodeURIComponent)
                   .join("|");
 
-                const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${stops}&travelmode=bicycling`;
+                const url = stops
+                  ? `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${stops}&travelmode=bicycling`
+                  : `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=bicycling`;
                 window.open(url, "_blank");
                 setRouteStarted(true);
 
