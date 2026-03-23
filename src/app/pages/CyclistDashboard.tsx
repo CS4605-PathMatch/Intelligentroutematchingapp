@@ -36,7 +36,7 @@ export default function CyclistDashboard() {
             />
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-lg">Hello, {user?.name.split(' ')[0]}</span>
+                <span className="text-lg">Hello, {user?.name?.split(' ')[0]}</span>
                 {user?.verified && (
                   <Badge className="bg-white text-blue-600 text-xs">Verified</Badge>
                 )}
@@ -89,7 +89,7 @@ export default function CyclistDashboard() {
             <span>Settings</span>
           </button>
           <button
-            onClick={() => { logout(); navigate("/"); }}
+            onClick={() => { logout().then(() => navigate("/")); }}
             className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition text-red-600"
           >
             <LogOut className="w-5 h-5" />

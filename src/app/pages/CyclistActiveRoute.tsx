@@ -294,7 +294,7 @@ export default function CyclistActiveRoute() {
                   .map(encodeURIComponent)
                   .join("|");
 
-                const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=optimize:true|${stops}&travelmode=bicycling`;
+                const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${stops}&travelmode=bicycling`;
                 window.open(url, "_blank");
                 setRouteStarted(true);
 
