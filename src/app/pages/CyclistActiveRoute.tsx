@@ -45,6 +45,7 @@ export default function CyclistActiveRoute() {
   const [filterUrgency, setFilterUrgency] = useState<string>("all");
   const [routeMode, setRouteMode] = useState<RouteMode>("point-to-point");
   const [roundTripKm, setRoundTripKm] = useState(10);
+  const [maxDetourKm, setMaxDetourKm] = useState(2);
 
   useEffect(() => {
     const q = query(collection(db, "errands"), where("status", "==", "pending"));
@@ -110,25 +111,65 @@ export default function CyclistActiveRoute() {
 
   const queuedIds = new Set(queuedErrands.map(e => e.id));
 
+  const scoreErrand = (e: Errand): Pick<Errand, "deviation" | "matchScore"> => {
+    if (routeMode === "round-trip") {
+      if (!startLocation) return { deviation: 0, matchScore: 50 };
+      const detour =
+        haversineKm(startLocation, e.pickupLocation) +
+        haversineKm(e.pickupLocation, e.dropoffLocation) +
+        haversineKm(e.dropoffLocation, startLocation);
+      return {
+        deviation: Math.round(detour * 10) / 10,
+        matchScore: Math.max(0, Math.round((1 - detour / roundTripKm) * 100)),
+      };
+    }
+
+    // Point-to-point
+    if (!startLocation) return { deviation: 0, matchScore: 50 };
+
+    if (!endLocation) {
+      // Only start set — rank by distance to pickup
+      const d = haversineKm(startLocation, e.pickupLocation);
+      return {
+        deviation: Math.round(d * 10) / 10,
+        matchScore: Math.max(0, Math.round(100 - (d / 10) * 100)),
+      };
+    }
+
+    const directDist = haversineKm(startLocation, endLocation);
+    const withErrand =
+      haversineKm(startLocation, e.pickupLocation) +
+      haversineKm(e.pickupLocation, e.dropoffLocation) +
+      haversineKm(e.dropoffLocation, endLocation);
+    const detour = Math.max(0, withErrand - directDist);
+    return {
+      deviation: Math.round(detour * 10) / 10,
+      matchScore: Math.max(0, Math.round(100 * (1 - detour / Math.max(maxDetourKm, 0.1)))),
+    };
+  };
+
   const availableErrands = errands
     .filter(e => !queuedIds.has(e.id))
     .filter(e => filterUrgency === "all" || e.urgency === filterUrgency)
     .filter(e => {
-      if (routeMode !== "round-trip" || !startLocation) return true;
-      const detour =
+      if (routeMode === "round-trip") {
+        if (!startLocation) return true;
+        const detour =
+          haversineKm(startLocation, e.pickupLocation) +
+          haversineKm(e.pickupLocation, e.dropoffLocation) +
+          haversineKm(e.dropoffLocation, startLocation);
+        return detour <= roundTripKm;
+      }
+      // Point-to-point: filter by maxDetourKm when both endpoints are set
+      if (!startLocation || !endLocation) return true;
+      const directDist = haversineKm(startLocation, endLocation);
+      const withErrand =
         haversineKm(startLocation, e.pickupLocation) +
         haversineKm(e.pickupLocation, e.dropoffLocation) +
-        haversineKm(e.dropoffLocation, startLocation);
-      return detour <= roundTripKm;
+        haversineKm(e.dropoffLocation, endLocation);
+      return withErrand - directDist <= maxDetourKm;
     })
-    .map(e => {
-      if (routeMode !== "round-trip" || !startLocation) return e;
-      const detour =
-        haversineKm(startLocation, e.pickupLocation) +
-        haversineKm(e.pickupLocation, e.dropoffLocation) +
-        haversineKm(e.dropoffLocation, startLocation);
-      return { ...e, deviation: Math.round(detour * 10) / 10, matchScore: Math.round((1 - detour / roundTripKm) * 100) };
-    })
+    .map(e => ({ ...e, ...scoreErrand(e) }))
     .sort((a, b) => b.matchScore - a.matchScore);
 
   const totalEarnings = queuedErrands.reduce((sum, e) => sum + e.payment + (e.tip || 0), 0);
@@ -228,21 +269,42 @@ export default function CyclistActiveRoute() {
             </div>
 
             {routeMode === "point-to-point" && (
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-red-600 rounded-full flex-shrink-0"></div>
-                <div className="flex-1">
-                  <div className="text-xs text-gray-500 mb-1">To</div>
-                  <PlacesAutocomplete
-                    value={endAddress}
-                    onChange={setEndAddress}
-                    onPlaceSelect={(loc) => {
-                      setEndLocation(loc);
-                      setEndAddress(loc.address);
-                    }}
-                    placeholder="Search destination"
-                  />
+              <>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-600 rounded-full flex-shrink-0"></div>
+                  <div className="flex-1">
+                    <div className="text-xs text-gray-500 mb-1">To</div>
+                    <PlacesAutocomplete
+                      value={endAddress}
+                      onChange={setEndAddress}
+                      onPlaceSelect={(loc) => {
+                        setEndLocation(loc);
+                        setEndAddress(loc.address);
+                      }}
+                      placeholder="Search destination"
+                    />
+                  </div>
                 </div>
-              </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Max detour distance</span>
+                    <span className="text-blue-600">{maxDetourKm} km</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={20}
+                    step={0.5}
+                    value={maxDetourKm}
+                    onChange={e => setMaxDetourKm(Number(e.target.value))}
+                    className="w-full accent-blue-600"
+                  />
+                  <div className="flex justify-between text-xs text-gray-400">
+                    <span>0.5 km</span>
+                    <span>20 km</span>
+                  </div>
+                </div>
+              </>
             )}
 
             {routeMode === "round-trip" && (
@@ -308,7 +370,12 @@ export default function CyclistActiveRoute() {
           <div>
             <h2 className="text-gray-900">Matched Errands</h2>
             <p className="text-sm text-gray-600">
-              {availableErrands.length} errands {routeMode === "round-trip" ? `within ${roundTripKm} km round trip` : "along your route"}
+              {availableErrands.length} errands{" "}
+              {routeMode === "round-trip"
+                ? `within ${roundTripKm} km round trip`
+                : startLocation && endLocation
+                  ? `within ${maxDetourKm} km detour of your route`
+                  : "along your route"}
             </p>
           </div>
           <button className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm">
@@ -342,7 +409,9 @@ export default function CyclistActiveRoute() {
             <div className="text-blue-700">
               {routeMode === "round-trip"
                 ? `Errands are filtered to those whose full round-trip (pickup + dropoff + return) fits within your ${roundTripKm} km limit. Higher scores mean less total distance.`
-                : "Errands are ranked by proximity to your route, timing compatibility, and minimal detour distance. Higher match scores mean better alignment with your path."}
+                : startLocation && endLocation
+                  ? `Errands are filtered to those adding ≤ ${maxDetourKm} km of detour to your direct route. Score = 100 − (detour ÷ ${maxDetourKm} km). Set a smaller max detour for tighter matches.`
+                  : "Set your start and destination to filter errands by detour distance. Errands on or near your path score highest."}
             </div>
           </div>
         </div>

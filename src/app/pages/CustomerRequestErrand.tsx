@@ -32,7 +32,27 @@ export default function CustomerRequestErrand() {
   const [tip, setTip] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const estimatedPrice = 8.50;
+  function haversineMi(a: Location, b: Location): number {
+    const R = 3958.8;
+    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+    const x =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((a.lat * Math.PI) / 180) *
+        Math.cos((b.lat * Math.PI) / 180) *
+        Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  }
+
+  const RATE_PER_MI = 3;
+  const errandDistanceMi =
+    pickupLocation && dropoffLocation
+      ? Math.round(haversineMi(pickupLocation, dropoffLocation) * 10) / 10
+      : null;
+  const estimatedPrice =
+    errandDistanceMi !== null
+      ? Math.round(errandDistanceMi * RATE_PER_MI * 100) / 100
+      : null;
 
   const handleSubmit = async () => {
     if (!description || !pickupAddress || !dropoffAddress) {
@@ -59,7 +79,7 @@ export default function CustomerRequestErrand() {
         pickupLocation,
         dropoffLocation,
         urgency,
-        payment: estimatedPrice,
+        payment: estimatedPrice ?? 0,
         tip: parseFloat(tip) || 0,
         status: "pending",
         requestedTime: new Date().toISOString(),
@@ -198,22 +218,22 @@ export default function CustomerRequestErrand() {
             <span className="text-gray-900">Estimated price</span>
             <div className="flex items-center gap-1 text-2xl text-green-600">
               <DollarSign className="w-6 h-6" />
-              <span>{(estimatedPrice + (parseFloat(tip) || 0)).toFixed(2)}</span>
+              <span>
+                {estimatedPrice !== null
+                  ? ((estimatedPrice) + (parseFloat(tip) || 0)).toFixed(2)
+                  : "—"}
+              </span>
             </div>
           </div>
           <div className="space-y-1 text-sm">
-            <div className="flex items-center justify-between text-gray-600">
-              <span>Base fee</span>
-              <span>$5.00</span>
-            </div>
-            <div className="flex items-center justify-between text-gray-600">
-              <span>Distance (2.3 km)</span>
-              <span>$3.00</span>
-            </div>
-            <div className="flex items-center justify-between text-gray-600">
-              <span>Service fee (10%)</span>
-              <span>$0.50</span>
-            </div>
+            {estimatedPrice !== null ? (
+              <div className="flex items-center justify-between text-gray-600">
+                <span>Distance ({errandDistanceMi} mi × $3/mi)</span>
+                <span>${estimatedPrice.toFixed(2)}</span>
+              </div>
+            ) : (
+              <div className="text-gray-400 italic">Select pickup and dropoff to see price</div>
+            )}
             <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
               <span className="text-gray-600">Add tip (optional)</span>
               <Input
