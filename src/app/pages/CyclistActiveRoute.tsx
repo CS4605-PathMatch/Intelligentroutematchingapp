@@ -15,10 +15,14 @@ import {
   X,
   RotateCcw,
   ArrowRightLeft,
+  CheckCircle,
+  KeyRound,
 } from "lucide-react";
+import { Input } from "../components/ui/input";
 import { toast } from "sonner";
 import { Errand, Location } from "../types";
 import { collection, addDoc, updateDoc, doc, query, where, onSnapshot } from "firebase/firestore";
+
 import { db } from "../lib/firebase";
 import { useAuth } from "../context/AuthContext";
 
@@ -65,38 +69,31 @@ export default function CyclistActiveRoute() {
   const [endAddress, setEndAddress] = useState("");
   const [startLocation, setStartLocation] = useState<Location | null>(null);
   const [endLocation, setEndLocation] = useState<Location | null>(null);
+  const [completingErrandId, setCompletingErrandId] = useState<string | null>(null);
+  const [codeInput, setCodeInput] = useState("");
+  const [codeError, setCodeError] = useState(false);
 
   const handleAcceptErrand = async (errandId: string) => {
     const errand = errands.find(e => e.id === errandId);
     if (!errand) return;
 
+    const confirmationCode = String(Math.floor(1000 + Math.random() * 9000));
+    const errandWithCode = { ...errand, confirmationCode };
+
     // Store full errand object now — it will disappear from pending list after Firestore update
-    setQueuedErrands(prev => [...prev, errand]);
+    setQueuedErrands(prev => [...prev, errandWithCode]);
 
     if (user) {
       try {
-        await Promise.all([
-          // Mark errand as matched with this cyclist
-          updateDoc(doc(db, "errands", errandId), {
-            status: "matched",
-            cyclistId: user.id,
-            cyclistName: user.name,
-            cyclistAvatar: user.avatar,
-            cyclistRating: user.rating,
-            acceptedAt: new Date().toISOString(),
-          }),
-          // Record earnings in cyclist's ride history
-          addDoc(collection(db, "users", user.id, "rides"), {
-            errandId,
-            earnings: errand.payment,
-            tip: errand.tip ?? 0,
-            completedAt: new Date().toISOString(),
-            description: errand.description,
-            from: errand.pickupLocation.address,
-            to: errand.dropoffLocation.address,
-            status: "in-progress",
-          }),
-        ]);
+        await updateDoc(doc(db, "errands", errandId), {
+          status: "matched",
+          cyclistId: user.id,
+          cyclistName: user.name,
+          cyclistAvatar: user.avatar,
+          cyclistRating: user.rating,
+          confirmationCode,
+          acceptedAt: new Date().toISOString(),
+        });
       } catch (err) {
         console.error("Failed to accept errand:", err);
         toast.error("Failed to accept errand.");
@@ -176,6 +173,43 @@ export default function CyclistActiveRoute() {
 
   const handleRemoveErrand = (errandId: string) => {
     setQueuedErrands(prev => prev.filter(e => e.id !== errandId));
+  };
+
+  const handleCompleteErrand = async () => {
+    if (!completingErrandId || !user) return;
+    const errand = queuedErrands.find(e => e.id === completingErrandId);
+    if (!errand) return;
+
+    if (codeInput.trim() !== errand.confirmationCode) {
+      setCodeError(true);
+      return;
+    }
+
+    try {
+      await Promise.all([
+        updateDoc(doc(db, "errands", completingErrandId), {
+          status: "completed",
+          completedAt: new Date().toISOString(),
+        }),
+        addDoc(collection(db, "users", user.id, "rides"), {
+          errandId: completingErrandId,
+          earnings: errand.payment,
+          tip: errand.tip ?? 0,
+          completedAt: new Date().toISOString(),
+          description: errand.description,
+          from: errand.pickupLocation.address,
+          to: errand.dropoffLocation.address,
+          status: "completed",
+        }),
+      ]);
+      setQueuedErrands(prev => prev.filter(e => e.id !== completingErrandId));
+      setCompletingErrandId(null);
+      setCodeInput("");
+      setCodeError(false);
+      toast.success("Errand completed! Payment released.");
+    } catch {
+      toast.error("Failed to complete errand.");
+    }
   };
 
   return (
@@ -297,7 +331,10 @@ export default function CyclistActiveRoute() {
                     step={0.5}
                     value={maxDetourKm}
                     onChange={e => setMaxDetourKm(Number(e.target.value))}
-                    className="w-full accent-blue-600"
+                    className="w-full accent-blue-600 h-2 rounded-full appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, #2563eb ${((maxDetourKm - 0.5) / (20 - 0.5)) * 100}%, #e5e7eb ${((maxDetourKm - 0.5) / (20 - 0.5)) * 100}%)`
+                    }}
                   />
                   <div className="flex justify-between text-xs text-gray-400">
                     <span>0.5 km</span>
@@ -320,7 +357,10 @@ export default function CyclistActiveRoute() {
                   step={1}
                   value={roundTripKm}
                   onChange={e => setRoundTripKm(Number(e.target.value))}
-                  className="w-full accent-blue-600"
+                  className="w-full accent-blue-600 h-2 rounded-full appearance-none cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, #2563eb ${((roundTripKm - 2) / (50 - 2)) * 100}%, #e5e7eb ${((roundTripKm - 2) / (50 - 2)) * 100}%)`
+                  }}
                 />
                 <div className="flex justify-between text-xs text-gray-400">
                   <span>2 km</span>
@@ -350,9 +390,17 @@ export default function CyclistActiveRoute() {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <span className="text-green-700 text-xs">+${(e.payment + (e.tip ?? 0)).toFixed(2)}</span>
-                    {!routeStarted && (
+                    {!routeStarted ? (
                       <button onClick={() => handleRemoveErrand(e.id)} className="text-gray-400 hover:text-red-500">
                         <X className="w-3 h-3" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setCompletingErrandId(e.id); setCodeInput(""); setCodeError(false); }}
+                        className="flex items-center gap-1 bg-green-600 text-white text-xs px-2 py-1 rounded-lg ml-1"
+                      >
+                        <CheckCircle className="w-3 h-3" />
+                        Complete
                       </button>
                     )}
                   </div>
@@ -435,6 +483,57 @@ export default function CyclistActiveRoute() {
         )}
       </div>
 
+      {/* Completion code modal */}
+      {completingErrandId && (() => {
+        const errand = queuedErrands.find(e => e.id === completingErrandId);
+        if (!errand) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-green-100 rounded-full p-2">
+                  <KeyRound className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <div className="text-gray-900">Confirm Delivery</div>
+                  <div className="text-sm text-gray-500 truncate">{errand.description}</div>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Ask the customer for their 4-digit confirmation code to complete this delivery and release payment.
+              </p>
+              <Input
+                type="number"
+                placeholder="Enter 4-digit code"
+                value={codeInput}
+                onChange={e => { setCodeInput(e.target.value); setCodeError(false); }}
+                className={`text-center text-2xl tracking-widest h-14 mb-2 ${codeError ? "border-red-500" : ""}`}
+                maxLength={4}
+              />
+              {codeError && (
+                <p className="text-sm text-red-500 text-center mb-3">Incorrect code. Ask the customer to check their app.</p>
+              )}
+              <div className="flex gap-3 mt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => { setCompletingErrandId(null); setCodeInput(""); setCodeError(false); }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  onClick={handleCompleteErrand}
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Confirm
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Sticky Start Trip bar */}
       {queuedErrands.length > 0 && !routeStarted && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-xl">
@@ -473,6 +572,7 @@ export default function CyclistActiveRoute() {
                 await Promise.all(
                   queuedErrands.map(e =>
                     updateDoc(doc(db, "errands", e.id), {
+                      status: "in-progress",
                       cyclistStartLocation: startLocation,
                       tripStartedAt: new Date().toISOString(),
                     })

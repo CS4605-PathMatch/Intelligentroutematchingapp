@@ -44,23 +44,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log("AuthProvider mounting", {
+      authConfig: {
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      },
+    });
+
+    const timer = setTimeout(() => {
+      console.warn("AuthProvider timeout: onAuthStateChanged did not fire in 8s, forcing loading=false");
+      setLoading(false);
+    }, 8000);
+
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      clearTimeout(timer);
+      console.log("onAuthStateChanged fired", firebaseUser);
+
       if (firebaseUser) {
-        const snap = await getDoc(doc(db, "users", firebaseUser.uid));
-        if (snap.exists()) {
-          const data = snap.data() as UserDocument;
-          // Restore whichever role was active — prefer the one stored in sessionStorage
-          const activeRole = sessionStorage.getItem("activeRole") as UserType | null;
-          const profile = activeRole && data[activeRole]
-            ? { ...data[activeRole]!, role: activeRole }
-            : data.cyclist
-            ? { ...data.cyclist, role: "cyclist" as UserType }
-            : data.customer
-            ? { ...data.customer, role: "customer" as UserType }
-            : null;
-          setUser(profile);
-        } else {
-          setUser(null);
+        try {
+          const snap = await getDoc(doc(db, "users", firebaseUser.uid));
+          if (snap.exists()) {
+            const data = snap.data() as UserDocument;
+            const activeRole = sessionStorage.getItem("activeRole") as UserType | null;
+            const profile = activeRole && data[activeRole]
+              ? { ...data[activeRole]!, role: activeRole }
+              : data.cyclist
+              ? { ...data.cyclist, role: "cyclist" as UserType }
+              : data.customer
+              ? { ...data.customer, role: "customer" as UserType }
+              : null;
+            setUser(profile);
+          } else {
+            setUser(null);
+            console.warn("User doc not found, user is null");
+          }
+        } catch (err: any) {
+          console.error("Failed to load user profile from Firestore", err);
+          setUser(null); // allow login UI when Firestore is temporarily unavailable
         }
       } else {
         setUser(null);
@@ -68,7 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
     });
-    return unsub;
+
+    return () => {
+      clearTimeout(timer);
+      unsub();
+    };
   }, []);
 
   const login = async (email: string, password: string, role: UserType) => {

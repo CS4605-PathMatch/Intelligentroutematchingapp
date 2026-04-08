@@ -8,7 +8,7 @@ const GOOGLE_MAPS_LIBRARIES: ("places")[] = ["places"];
 
 function AppRoutes() {
   const { loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading auth…</div>;
   return <RouterProvider router={router} />;
 }
 

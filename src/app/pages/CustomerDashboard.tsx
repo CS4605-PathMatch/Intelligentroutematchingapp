@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -12,10 +12,10 @@ import {
   LogOut,
   Star,
   Clock,
-  CheckCircle
+  CheckCircle,
+  ClipboardList
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useEffect, useState } from "react";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Errand } from "../types";
@@ -106,11 +106,11 @@ export default function CustomerDashboard() {
       {/* Main content */}
       <div className="p-6 space-y-6">
         {/* Active orders */}
-        {orders.filter(o => o.status === "pending" || o.status === "matched").length > 0 && (
+        {orders.filter(o => o.status === "pending" || o.status === "matched" || o.status === "in-progress").length > 0 && (
           <div>
             <h2 className="text-gray-900 mb-3">Active Orders</h2>
             <div className="space-y-3">
-              {orders.filter(o => o.status === "pending" || o.status === "matched").map(order => (
+              {orders.filter(o => o.status === "pending" || o.status === "matched" || o.status === "in-progress").map(order => (
                 <Card
                   key={order.id}
                   className="p-4 bg-gradient-to-r from-green-50 to-blue-50 border-green-200 cursor-pointer"
@@ -118,8 +118,13 @@ export default function CustomerDashboard() {
                 >
                   <div className="flex items-start justify-between mb-1">
                     <span className="text-gray-900">{order.description}</span>
-                    <Badge className={order.status === "matched" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}>
-                      {order.status === "matched" ? "Matched" : "Pending"}
+                    <Badge className={
+                      order.status === "in-progress" ? "bg-green-100 text-green-700" :
+                      order.status === "matched" ? "bg-blue-100 text-blue-700" :
+                      "bg-yellow-100 text-yellow-700"
+                    }>
+                      {order.status === "in-progress" ? "En Route" :
+                       order.status === "matched" ? "Matched" : "Pending"}
                     </Badge>
                   </div>
                   <p className="text-sm text-gray-600">${(order.payment + (order.tip ?? 0)).toFixed(2)}</p>
@@ -153,13 +158,25 @@ export default function CustomerDashboard() {
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     <Clock className="w-3 h-3" />
-                    <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                    <span>{new Date((order as any).createdAt).toLocaleDateString()}</span>
                   </div>
                 </Card>
               ))}
             </div>
           )}
         </div>
+
+        {/* All orders link */}
+        <button
+          onClick={() => navigate("/customer/orders")}
+          className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:opacity-75 transition"
+        >
+          <span className="flex items-center gap-2 text-gray-700">
+            <ClipboardList className="w-5 h-5 text-green-600" />
+            View all orders
+          </span>
+          <span className="text-gray-400 text-sm">→</span>
+        </button>
 
         {/* How it works */}
         <Card className="p-4 bg-gradient-to-br from-blue-50 to-green-50 border-blue-200">
@@ -194,22 +211,8 @@ export default function CustomerDashboard() {
           <h3 className="text-gray-900 mb-3">Transparent Pricing</h3>
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-gray-600">Base delivery fee</span>
-              <span className="text-gray-900">$5.00</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Per kilometer</span>
-              <span className="text-gray-900">$1.50</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Service fee</span>
-              <span className="text-gray-900">10%</span>
-            </div>
-            <div className="pt-2 border-t border-gray-100">
-              <div className="flex items-center justify-between text-green-600">
-                <span>Average savings vs. traditional delivery</span>
-                <span>30-40%</span>
-              </div>
+              <span className="text-gray-600">Per mile</span>
+              <span className="text-gray-900">$3.00</span>
             </div>
           </div>
         </Card>

@@ -5,8 +5,10 @@ import SignUp from "./pages/SignUp";
 import CyclistDashboard from "./pages/CyclistDashboard";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import CyclistActiveRoute from "./pages/CyclistActiveRoute";
+import CyclistErrands from "./pages/CyclistErrands";
 import CustomerRequestErrand from "./pages/CustomerRequestErrand";
 import CustomerTrackDelivery from "./pages/CustomerTrackDelivery";
+import CustomerOrders from "./pages/CustomerOrders";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -23,9 +25,11 @@ export const router = createBrowserRouter([
         children: [
           { path: "cyclist", Component: CyclistDashboard },
           { path: "cyclist/route", Component: CyclistActiveRoute },
+          { path: "cyclist/errands", Component: CyclistErrands },
           { path: "customer", Component: CustomerDashboard },
           { path: "customer/request", Component: CustomerRequestErrand },
           { path: "customer/track/:orderId", Component: CustomerTrackDelivery },
+          { path: "customer/orders", Component: CustomerOrders },
           { path: "profile/:userId", Component: Profile },
         ],
       },

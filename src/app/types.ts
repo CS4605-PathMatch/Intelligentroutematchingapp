@@ -42,6 +42,7 @@ export interface Errand {
   requestedTime: string;
   status: "pending" | "matched" | "in-progress" | "completed" | "cancelled";
   cyclistId?: string;
+  confirmationCode?: string;
   deviation: number; // in km
   matchScore: number; // 0-100
 }

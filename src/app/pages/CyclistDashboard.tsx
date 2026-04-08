@@ -1,27 +1,40 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import {
   Bike,
-  DollarSign,
   TrendingUp,
-  MapPin,
   Menu,
   User,
   Settings,
   LogOut,
-  Star
+  Star,
+  ClipboardList,
+  MapPin,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useCyclistStats } from "../hooks/useCyclistStats";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 export default function CyclistDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { stats } = useCyclistStats(user?.id);
   const [showMenu, setShowMenu] = useState(false);
+  const [activeCount, setActiveCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, "errands"),
+      where("cyclistId", "==", user.id),
+      where("status", "in", ["matched", "in-progress"])
+    );
+    return onSnapshot(q, (snap) => setActiveCount(snap.size));
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 relative">
@@ -124,14 +137,6 @@ export default function CyclistDashboard() {
               <span className="text-gray-600">Average per trip</span>
               <span className="text-green-600">${(stats.totalRides > 0 ? (stats.monthEarnings / stats.totalRides).toFixed(2) : "0.00")}</span>
             </div>
-            <div className="pt-2 border-t border-gray-100">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Active errands</span>
-                <Badge className="bg-blue-100 text-blue-700">
-                  0
-                </Badge>
-              </div>
-            </div>
           </div>
         </Card>
 
@@ -185,6 +190,43 @@ export default function CyclistDashboard() {
             </div>
           </div>
         </Card>
+      </div>
+
+      {/* Bottom tab bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex z-20">
+        <button
+          onClick={() => navigate("/cyclist")}
+          className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-blue-600"
+        >
+          <Bike className="w-5 h-5" />
+          <span className="text-xs">Home</span>
+        </button>
+        <button
+          onClick={() => navigate("/cyclist/route")}
+          className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-gray-400 hover:text-blue-600 transition"
+        >
+          <MapPin className="w-5 h-5" />
+          <span className="text-xs">Route</span>
+        </button>
+        <button
+          onClick={() => navigate("/cyclist/errands")}
+          className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-gray-400 hover:text-blue-600 transition relative"
+        >
+          <ClipboardList className="w-5 h-5" />
+          <span className="text-xs">Errands</span>
+          {activeCount > 0 && (
+            <span className="absolute top-2 right-6 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+              {activeCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => navigate(`/profile/${user?.id}`)}
+          className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-gray-400 hover:text-blue-600 transition"
+        >
+          <User className="w-5 h-5" />
+          <span className="text-xs">Profile</span>
+        </button>
       </div>
     </div>
   );

@@ -14,10 +14,9 @@ import {
   Shield,
   DollarSign,
 } from "lucide-react";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Errand } from "../types";
-import { toast } from "sonner";
 import MapView from "../components/MapView";
 
 export default function CustomerTrackDelivery() {
@@ -25,7 +24,6 @@ export default function CustomerTrackDelivery() {
   const { orderId } = useParams();
   const [errand, setErrand] = useState<Errand | null>(null);
   const [loading, setLoading] = useState(true);
-  const [completing, setCompleting] = useState(false);
   const [eta, setEta] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,21 +63,6 @@ export default function CustomerTrackDelivery() {
     );
   }, [errand?.status, (errand as any)?.cyclistStartLocation]);
 
-  const handleMarkDelivered = async () => {
-    if (!orderId || !errand) return;
-    setCompleting(true);
-    try {
-      await updateDoc(doc(db, "errands", orderId), {
-        status: "completed",
-        completedAt: new Date().toISOString(),
-      });
-      toast.success("Delivery confirmed! Payment released to cyclist.");
-    } catch (err) {
-      toast.error("Failed to confirm delivery.");
-    } finally {
-      setCompleting(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -100,7 +83,9 @@ export default function CustomerTrackDelivery() {
 
   const isPending = errand.status === "pending";
   const isMatched = errand.status === "matched";
+  const isInProgress = errand.status === "in-progress";
   const isCompleted = errand.status === "completed";
+  const isActive = isMatched || isInProgress;
 
   const paymentTotal = errand.payment + (errand.tip ?? 0);
 
@@ -121,8 +106,8 @@ export default function CustomerTrackDelivery() {
         </div>
       </div>
 
-      {/* Live map — shown when matched */}
-      {(isMatched || isCompleted) && (
+      {/* Live map — shown when active or completed */}
+      {(isActive || isCompleted) && (
         <div className="px-4 pt-4">
           <MapView
             startLocation={(errand as any).cyclistStartLocation ?? errand.pickupLocation}
@@ -150,12 +135,12 @@ export default function CustomerTrackDelivery() {
             </div>
           )}
 
-          {isMatched && (
+          {isActive && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <Badge className="bg-blue-100 text-blue-700">
+                <Badge className={isInProgress ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}>
                   <CheckCircle className="w-3 h-3 mr-1" />
-                  Cyclist matched
+                  {isInProgress ? "En route" : "Cyclist matched"}
                 </Badge>
                 <div className="flex items-center gap-2">
                   {eta && (
@@ -199,8 +184,8 @@ export default function CustomerTrackDelivery() {
           )}
         </Card>
 
-        {/* Cyclist info — shown when matched or completed */}
-        {(isMatched || isCompleted) && (errand as any).cyclistName && (
+        {/* Cyclist info — shown when active or completed */}
+        {(isActive || isCompleted) && (errand as any).cyclistName && (
           <Card className="p-4">
             <h3 className="text-gray-900 mb-3">Your Cyclist</h3>
             <div className="flex items-center gap-3">
@@ -296,20 +281,28 @@ export default function CustomerTrackDelivery() {
           </div>
         </Card>
 
-        {/* Mark delivered — only shown when matched */}
-        {isMatched && (
-          <Button
-            onClick={handleMarkDelivered}
-            disabled={completing}
-            className="w-full bg-green-600 hover:bg-green-700 h-12 text-base"
-          >
-            {completing ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        {/* Confirmation code — shown when active */}
+        {isActive && (
+          <Card className="p-4 border-2 border-blue-200 bg-blue-50">
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className="w-4 h-4 text-blue-600" />
+              <span className="text-blue-900">Your Confirmation Code</span>
+            </div>
+            {(errand as any).confirmationCode ? (
+              <>
+                <div className="text-center text-4xl tracking-[0.3em] text-blue-700 py-2">
+                  {(errand as any).confirmationCode}
+                </div>
+                <p className="text-xs text-blue-600 text-center mt-1">
+                  Share this code with your cyclist when they arrive to confirm delivery.
+                </p>
+              </>
             ) : (
-              <CheckCircle className="w-4 h-4 mr-2" />
+              <p className="text-sm text-blue-600 text-center py-2">
+                Code loading... refresh if this persists.
+              </p>
             )}
-            {completing ? "Confirming..." : "Confirm Delivery & Release Payment"}
-          </Button>
+          </Card>
         )}
 
         {isCompleted && (

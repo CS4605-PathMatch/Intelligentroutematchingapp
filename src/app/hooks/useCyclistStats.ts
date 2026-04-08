@@ -10,6 +10,7 @@ export interface Ride {
   description: string;
   from: string;
   to: string;
+  status: string;
 }
 
 export interface CyclistStats {
@@ -46,7 +47,9 @@ export function useCyclistStats(userId: string | undefined) {
     const q = query(ridesRef, orderBy("completedAt", "desc"));
 
     const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Ride));
+      const data = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as Ride))
+        .filter((r) => r.status === "completed");
       setRides(data);
       setLoading(false);
     });
