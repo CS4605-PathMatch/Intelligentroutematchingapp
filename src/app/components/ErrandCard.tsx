@@ -1,7 +1,8 @@
+import React from "react";
 import { Errand } from "../types";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { MapPin, Clock, DollarSign, Star, TrendingUp, Shield } from "lucide-react";
+import { MapPin, Clock, DollarSign, Star, ThumbsUp, Minus, ThumbsDown, Shield } from "lucide-react";
 
 interface ErrandCardProps {
   errand: Errand;
@@ -16,10 +17,10 @@ export default function ErrandCard({ errand, onAccept, showMatchScore = true }: 
     urgent: "bg-red-100 text-red-700",
   };
 
-  const getMatchScoreColor = (score: number) => {
-    if (score >= 80) return "text-green-600";
-    if (score >= 60) return "text-orange-600";
-    return "text-gray-600";
+  const getMatchLabel = (score: number): { label: string; color: string; Icon: React.ElementType } => {
+    if (score >= 85) return { label: "Great Match", color: "text-green-600", Icon: ThumbsUp };
+    if (score >= 65) return { label: "Good Match", color: "text-yellow-500", Icon: Minus };
+    return { label: "Bad Match", color: "text-red-500", Icon: ThumbsDown };
   };
 
   const formatTime = (isoString: string) => {
@@ -42,15 +43,15 @@ export default function ErrandCard({ errand, onAccept, showMatchScore = true }: 
           </div>
           <p className="text-sm text-gray-600">{errand.description}</p>
         </div>
-        {showMatchScore && (
-          <div className={`text-right ${getMatchScoreColor(errand.matchScore)}`}>
-            <div className="flex items-center gap-1">
-              <TrendingUp className="w-4 h-4" />
-              <span className="text-lg">{errand.matchScore}%</span>
+        {showMatchScore && (() => {
+          const { label, color, Icon } = getMatchLabel(errand.matchScore);
+          return (
+            <div className={`flex items-center gap-1 ${color}`}>
+              <Icon className="w-4 h-4" />
+              <span className="text-sm font-medium">{label}</span>
             </div>
-            <div className="text-xs text-gray-500">match</div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Items */}

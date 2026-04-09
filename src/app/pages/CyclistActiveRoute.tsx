@@ -341,8 +341,8 @@ export default function CyclistActiveRoute() {
             <div className="text-blue-900 mb-1">Smart Matching Algorithm</div>
             <div className="text-blue-700">
               {routeMode === "round-trip"
-                ? `Errands are filtered to those whose full round-trip (pickup + dropoff + return) fits within your ${roundTripKm} km limit. Higher scores mean less total distance.`
-                : "Errands are ranked by proximity to your route, timing compatibility, and minimal detour distance. Higher match scores mean better alignment with your path."}
+                ? `Errands within your ${roundTripKm} km round-trip budget are ranked by fit: Great = detour under 15% of budget and timing within 10 min · Good = detour 15–35% and timing within 20 min · Bad = detour over 35% or timing mismatch.`
+                : "Errands ranked by route alignment and timing. Great = detour under 15% of your route and timing within 10 min · Good = detour 15–35% and timing within 20 min · Bad = detour over 35% or timing mismatch."}
             </div>
           </div>
         </div>
