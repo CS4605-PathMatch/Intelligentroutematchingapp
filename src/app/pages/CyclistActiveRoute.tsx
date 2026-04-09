@@ -123,14 +123,6 @@ export default function CyclistActiveRoute() {
   const availableErrands = errands
     .filter(e => !queuedIds.has(e.id))
     .filter(e => filterUrgency === "all" || e.urgency === filterUrgency)
-    .filter(e => {
-      if (routeMode !== "round-trip" || !startLocation) return true;
-      const detour =
-        haversineKm(startLocation, e.pickupLocation) +
-        haversineKm(e.pickupLocation, e.dropoffLocation) +
-        haversineKm(e.dropoffLocation, startLocation);
-      return detour <= roundTripKm;
-    })
     .map(e => {
       const timingDiff = Math.abs(new Date(e.requestedTime).getTime() - departureTime.getTime()) / 60000;
       if (routeMode !== "round-trip" || !startLocation) return { ...e, timingDiff };
@@ -356,7 +348,7 @@ export default function CyclistActiveRoute() {
           <div>
             <h2 className="text-gray-900">Matched Errands</h2>
             <p className="text-sm text-gray-600">
-              {availableErrands.length} errands {routeMode === "round-trip" ? `within ${roundTripKm} km round trip` : "along your route"}
+              {availableErrands.length} errands {routeMode === "round-trip" ? `ranked by ${roundTripKm} km round-trip fit` : "along your route"}
             </p>
           </div>
           <button className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm">
@@ -389,7 +381,7 @@ export default function CyclistActiveRoute() {
             <div className="text-blue-900 mb-1">Smart Matching Algorithm</div>
             <div className="text-blue-700">
               {routeMode === "round-trip"
-                ? `Errands within your ${roundTripKm} km round-trip budget are ranked by fit: Great = detour under 15% of budget and timing within 10 min · Good = detour 15–35% and timing within 20 min · Bad = detour over 35% or timing mismatch.`
+                ? `All errands ranked by fit against your ${roundTripKm} km round-trip budget: Great = detour under 15% of budget and timing within 10 min · Good = detour 15–35% and timing within 20 min · Bad = detour over 35% or timing mismatch.`
                 : "Errands ranked by route alignment and timing. Great = detour under 15% of your route and timing within 10 min · Good = detour 15–35% and timing within 20 min · Bad = detour over 35% or timing mismatch."}
             </div>
           </div>
