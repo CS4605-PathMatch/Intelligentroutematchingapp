@@ -17,9 +17,14 @@ export default function ErrandCard({ errand, onAccept, showMatchScore = true }: 
     urgent: "bg-red-100 text-red-700",
   };
 
-  const getMatchLabel = (score: number): { label: string; color: string; Icon: React.ElementType } => {
-    if (score >= 85) return { label: "Great Match", color: "text-green-600", Icon: ThumbsUp };
-    if (score >= 65) return { label: "Good Match", color: "text-yellow-500", Icon: Minus };
+  const getMatchLabel = (score: number, timingDiff?: number): { label: string; color: string; Icon: React.ElementType } => {
+    const distanceGreat = score >= 85;
+    const distanceGood = score >= 65;
+    const timingGreat = timingDiff === undefined || timingDiff <= 10;
+    const timingGood = timingDiff === undefined || timingDiff <= 20;
+
+    if (distanceGreat && timingGreat) return { label: "Great Match", color: "text-green-600", Icon: ThumbsUp };
+    if (distanceGood && timingGood) return { label: "Good Match", color: "text-yellow-500", Icon: Minus };
     return { label: "Bad Match", color: "text-red-500", Icon: ThumbsDown };
   };
 
@@ -44,7 +49,7 @@ export default function ErrandCard({ errand, onAccept, showMatchScore = true }: 
           <p className="text-sm text-gray-600">{errand.description}</p>
         </div>
         {showMatchScore && (() => {
-          const { label, color, Icon } = getMatchLabel(errand.matchScore);
+          const { label, color, Icon } = getMatchLabel(errand.matchScore, errand.timingDiff);
           return (
             <div className={`flex items-center gap-1 ${color}`}>
               <Icon className="w-4 h-4" />

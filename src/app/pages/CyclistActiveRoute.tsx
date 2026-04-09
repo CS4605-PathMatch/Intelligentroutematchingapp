@@ -15,6 +15,8 @@ import {
   X,
   RotateCcw,
   ArrowRightLeft,
+  Clock,
+  CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Errand, Location } from "../types";
@@ -45,6 +47,12 @@ export default function CyclistActiveRoute() {
   const [filterUrgency, setFilterUrgency] = useState<string>("all");
   const [routeMode, setRouteMode] = useState<RouteMode>("point-to-point");
   const [roundTripKm, setRoundTripKm] = useState(10);
+  const [departureMode, setDepartureMode] = useState<"now" | "scheduled">("now");
+  const [scheduledTime, setScheduledTime] = useState<string>(() => {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    return now.toISOString().slice(0, 16);
+  });
 
   useEffect(() => {
     const q = query(collection(db, "errands"), where("status", "==", "pending"));
@@ -110,6 +118,8 @@ export default function CyclistActiveRoute() {
 
   const queuedIds = new Set(queuedErrands.map(e => e.id));
 
+  const departureTime = departureMode === "now" ? new Date() : new Date(scheduledTime);
+
   const availableErrands = errands
     .filter(e => !queuedIds.has(e.id))
     .filter(e => filterUrgency === "all" || e.urgency === filterUrgency)
@@ -122,12 +132,13 @@ export default function CyclistActiveRoute() {
       return detour <= roundTripKm;
     })
     .map(e => {
-      if (routeMode !== "round-trip" || !startLocation) return e;
+      const timingDiff = Math.abs(new Date(e.requestedTime).getTime() - departureTime.getTime()) / 60000;
+      if (routeMode !== "round-trip" || !startLocation) return { ...e, timingDiff };
       const detour =
         haversineKm(startLocation, e.pickupLocation) +
         haversineKm(e.pickupLocation, e.dropoffLocation) +
         haversineKm(e.dropoffLocation, startLocation);
-      return { ...e, deviation: Math.round(detour * 10) / 10, matchScore: Math.round((1 - detour / roundTripKm) * 100) };
+      return { ...e, deviation: Math.round(detour * 10) / 10, matchScore: Math.round((1 - detour / roundTripKm) * 100), timingDiff };
     })
     .sort((a, b) => b.matchScore - a.matchScore);
 
@@ -266,6 +277,43 @@ export default function CyclistActiveRoute() {
                 </div>
               </div>
             )}
+            {/* Departure time */}
+            <div className="space-y-2">
+              <div className="text-xs text-gray-500">Departure</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDepartureMode("now")}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition ${
+                    departureMode === "now"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-200"
+                  }`}
+                >
+                  <Clock className="w-4 h-4" />
+                  Leave Now
+                </button>
+                <button
+                  onClick={() => setDepartureMode("scheduled")}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition ${
+                    departureMode === "scheduled"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-200"
+                  }`}
+                >
+                  <CalendarClock className="w-4 h-4" />
+                  Schedule
+                </button>
+              </div>
+              {departureMode === "scheduled" && (
+                <input
+                  type="datetime-local"
+                  value={scheduledTime}
+                  min={new Date().toISOString().slice(0, 16)}
+                  onChange={e => setScheduledTime(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              )}
+            </div>
           </div>
 
           {queuedErrands.length > 0 && (
