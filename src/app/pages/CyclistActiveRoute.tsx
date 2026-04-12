@@ -120,8 +120,18 @@ export default function CyclistActiveRoute() {
 
   const departureTime = departureMode === "now" ? new Date() : new Date(scheduledTime);
 
+  const urgencyWindowMinutes: Record<string, number> = {
+    urgent: 30,
+    soon: 60,
+    flexible: 240,
+  };
+
   const availableErrands = errands
     .filter(e => !queuedIds.has(e.id))
+    .filter(e => {
+      const windowMs = (urgencyWindowMinutes[e.urgency] ?? 120) * 60 * 1000;
+      return new Date(e.requestedTime).getTime() + windowMs > Date.now();
+    })
     .filter(e => filterUrgency === "all" || e.urgency === filterUrgency)
     .map(e => {
       const timingDiff = Math.abs(new Date(e.requestedTime).getTime() - departureTime.getTime()) / 60000;

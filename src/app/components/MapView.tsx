@@ -18,7 +18,7 @@ interface MapViewProps {
 
 const mapContainerStyle = { width: "100%", height: "100%" };
 
-const defaultCenter = { lat: 40.7128, lng: -74.006 }; // NYC default
+const defaultCenter = { lat: 33.749, lng: -84.388 }; // Downtown Atlanta
 
 export default function MapView({
   startLocation,
