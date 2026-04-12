@@ -1,54 +1,116 @@
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { Progress } from "../components/ui/progress";
-import { 
+import {
   ArrowLeft,
   Star,
   Shield,
   Award,
-  TrendingUp,
-  MapPin,
-  Calendar
+  Calendar,
 } from "lucide-react";
-import { mockCyclist } from "../data/mockData";
+import { useAuth, AuthUser } from "../context/AuthContext";
+import { useCyclistStats } from "../hooks/useCyclistStats";
 
 export default function Profile() {
   const navigate = useNavigate();
   const { userId } = useParams();
+  const { user: authUser } = useAuth();
 
-  // Mock reviews
-  const reviews = [
-    {
-      id: 1,
-      author: "Sarah M.",
-      rating: 5,
-      date: "2026-02-08",
-      comment: "Super fast and friendly! Alex made the delivery seamless.",
-    },
-    {
-      id: 2,
-      author: "James K.",
-      rating: 5,
-      date: "2026-02-06",
-      comment: "Very professional and kept me updated throughout. Highly recommend!",
-    },
-    {
-      id: 3,
-      author: "Emily R.",
-      rating: 4,
-      date: "2026-02-04",
-      comment: "Great service, delivery was right on time.",
-    },
-  ];
+  const [profileUser, setProfileUser] = useState<AuthUser | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
-  const ratingBreakdown = [
-    { stars: 5, count: 98, percentage: 77 },
-    { stars: 4, count: 22, percentage: 17 },
-    { stars: 3, count: 5, percentage: 4 },
-    { stars: 2, count: 2, percentage: 2 },
-    { stars: 1, count: 0, percentage: 0 },
+  // Determine if we're viewing our own profile
+  const isOwnProfile = authUser?.id === userId;
+
+  useEffect(() => {
+    if (isOwnProfile && authUser) {
+      setProfileUser(authUser);
+      setLoadingProfile(false);
+      return;
+    }
+    // Viewing someone else — fetch from Firestore
+    if (!userId) return;
+    getDoc(doc(db, "users", userId)).then((snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const profile = data.cyclist ?? data.customer ?? null;
+        if (profile) {
+          const role = data.cyclist ? "cyclist" : "customer";
+          setProfileUser({ ...profile, role });
+        }
+      }
+      setLoadingProfile(false);
+    });
+  }, [userId, isOwnProfile, authUser]);
+
+  const { stats } = useCyclistStats(
+    profileUser?.role === "cyclist" ? profileUser.id : undefined
+  );
+
+  if (loadingProfile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-500">Loading profile...</div>
+      </div>
+    );
+  }
+
+  if (!profileUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-500">User not found.</div>
+      </div>
+    );
+  }
+
+  const verificationStatus = profileUser.idVerificationStatus;
+  const verificationBadge =
+    verificationStatus === "approved"
+      ? { label: "Verified", classes: "bg-green-100 text-green-700" }
+      : verificationStatus === "pending"
+      ? { label: "Pending review", classes: "bg-yellow-100 text-yellow-700" }
+      : verificationStatus === "rejected"
+      ? { label: "Rejected", classes: "bg-red-100 text-red-700" }
+      : { label: "Not submitted", classes: "bg-gray-100 text-gray-500" };
+
+  // Dynamic achievements
+  const achievements = [
+    {
+      emoji: "🚴",
+      title: "Century Club",
+      desc: "100+ deliveries",
+      earned: profileUser.totalTrips >= 100,
+      gradient: "from-blue-50 to-purple-50",
+      border: "border-blue-200",
+    },
+    {
+      emoji: "⭐",
+      title: "Top Rated",
+      desc: "4.8+ rating",
+      earned: profileUser.rating >= 4.8,
+      gradient: "from-yellow-50 to-orange-50",
+      border: "border-yellow-200",
+    },
+    {
+      emoji: "⚡",
+      title: "Speed Demon",
+      desc: "50+ deliveries",
+      earned: profileUser.totalTrips >= 50,
+      gradient: "from-green-50 to-emerald-50",
+      border: "border-green-200",
+    },
+    {
+      emoji: "🌱",
+      title: "Eco Warrior",
+      desc: "10+ deliveries",
+      earned: profileUser.totalTrips >= 10,
+      gradient: "from-pink-50 to-red-50",
+      border: "border-pink-200",
+    },
   ];
 
   return (
@@ -56,7 +118,7 @@ export default function Profile() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
-          <button 
+          <button
             onClick={() => navigate(-1)}
             className="flex items-center gap-2 text-gray-600"
           >
@@ -72,50 +134,56 @@ export default function Profile() {
         {/* Profile header */}
         <Card className="p-6">
           <div className="flex items-start gap-4 mb-4">
-            <img 
-              src={mockCyclist.avatar}
-              alt={mockCyclist.name}
-              className="w-20 h-20 rounded-full"
+            <img
+              src={profileUser.avatar}
+              alt={profileUser.name}
+              className="w-20 h-20 rounded-full object-cover"
             />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-xl text-gray-900">{mockCyclist.name}</h2>
-                {mockCyclist.verified && (
+                <h2 className="text-xl text-gray-900">{profileUser.name}</h2>
+                {profileUser.verified && (
                   <Shield className="w-5 h-5 text-blue-600" />
                 )}
               </div>
               <div className="flex items-center gap-2 mb-2">
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                  <span className="text-lg text-gray-900">{mockCyclist.rating}</span>
+                  <span className="text-lg text-gray-900">{profileUser.rating.toFixed(1)}</span>
                 </div>
                 <span className="text-gray-500">•</span>
-                <span className="text-gray-600">{mockCyclist.totalTrips} deliveries</span>
+                <span className="text-gray-600">{profileUser.totalTrips} deliveries</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Calendar className="w-4 h-4" />
-                <span>Joined {new Date(mockCyclist.joinedDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                <span>
+                  Joined{" "}
+                  {new Date(profileUser.joinedDate).toLocaleDateString("en-US", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </span>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
             <div className="text-center">
-              <div className="text-2xl text-gray-900">98%</div>
-              <div className="text-xs text-gray-600">On-time</div>
+              <div className="text-2xl text-gray-900">{profileUser.totalTrips}</div>
+              <div className="text-xs text-gray-600">Total trips</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl text-gray-900">99%</div>
-              <div className="text-xs text-gray-600">Acceptance</div>
+              <div className="text-2xl text-gray-900">{stats.completedToday}</div>
+              <div className="text-xs text-gray-600">Today</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl text-gray-900">24</div>
+              <div className="text-2xl text-gray-900">{stats.totalRides}</div>
               <div className="text-xs text-gray-600">This month</div>
             </div>
           </div>
         </Card>
 
-        {/* Verification badges */}
+        {/* Verification & Safety */}
         <Card className="p-4">
           <h3 className="text-gray-900 mb-3 flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-600" />
@@ -124,108 +192,63 @@ export default function Profile() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <Shield className="w-4 h-4 text-green-600" />
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  verificationStatus === "approved" ? "bg-green-100" :
+                  verificationStatus === "pending" ? "bg-yellow-100" : "bg-gray-100"
+                }`}>
+                  <Shield className={`w-4 h-4 ${
+                    verificationStatus === "approved" ? "text-green-600" :
+                    verificationStatus === "pending" ? "text-yellow-600" : "text-gray-400"
+                  }`} />
                 </div>
-                <span className="text-sm text-gray-900">Identity verified</span>
+                <span className="text-sm text-gray-900">Identity verification</span>
               </div>
-              <Badge className="bg-green-100 text-green-700">Verified</Badge>
+              <Badge className={verificationBadge.classes}>{verificationBadge.label}</Badge>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <Shield className="w-4 h-4 text-green-600" />
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${profileUser.verified ? "bg-green-100" : "bg-gray-100"}`}>
+                  <Shield className={`w-4 h-4 ${profileUser.verified ? "text-green-600" : "text-gray-400"}`} />
                 </div>
-                <span className="text-sm text-gray-900">Background check</span>
+                <span className="text-sm text-gray-900">Account verified</span>
               </div>
-              <Badge className="bg-green-100 text-green-700">Verified</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <Shield className="w-4 h-4 text-green-600" />
-                </div>
-                <span className="text-sm text-gray-900">Phone number</span>
-              </div>
-              <Badge className="bg-green-100 text-green-700">Verified</Badge>
+              <Badge className={profileUser.verified ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}>
+                {profileUser.verified ? "Verified" : "Unverified"}
+              </Badge>
             </div>
           </div>
         </Card>
 
         {/* Achievements */}
-        <Card className="p-4">
-          <h3 className="text-gray-900 mb-3 flex items-center gap-2">
-            <Award className="w-5 h-5 text-purple-600" />
-            Achievements
-          </h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-3 border border-blue-200">
-              <div className="text-2xl mb-1">🚴</div>
-              <div className="text-sm text-gray-900">Century Club</div>
-              <div className="text-xs text-gray-600">100+ deliveries</div>
-            </div>
-            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg p-3 border border-yellow-200">
-              <div className="text-2xl mb-1">⭐</div>
-              <div className="text-sm text-gray-900">Top Rated</div>
-              <div className="text-xs text-gray-600">4.8+ rating</div>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200">
-              <div className="text-2xl mb-1">⚡</div>
-              <div className="text-sm text-gray-900">Speed Demon</div>
-              <div className="text-xs text-gray-600">95%+ on-time</div>
-            </div>
-            <div className="bg-gradient-to-br from-pink-50 to-red-50 rounded-lg p-3 border border-pink-200">
-              <div className="text-2xl mb-1">🌱</div>
-              <div className="text-sm text-gray-900">Eco Warrior</div>
-              <div className="text-xs text-gray-600">500kg CO₂ saved</div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Rating breakdown */}
-        <Card className="p-4">
-          <h3 className="text-gray-900 mb-3">Rating Breakdown</h3>
-          <div className="space-y-2">
-            {ratingBreakdown.map((item) => (
-              <div key={item.stars} className="flex items-center gap-3">
-                <div className="flex items-center gap-1 w-12 text-sm text-gray-600">
-                  <span>{item.stars}</span>
-                  <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+        {profileUser.role === "cyclist" && (
+          <Card className="p-4">
+            <h3 className="text-gray-900 mb-3 flex items-center gap-2">
+              <Award className="w-5 h-5 text-purple-600" />
+              Achievements
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              {achievements.map((a) => (
+                <div
+                  key={a.title}
+                  className={`bg-gradient-to-br ${a.gradient} rounded-lg p-3 border ${a.border} ${
+                    !a.earned ? "opacity-40 grayscale" : ""
+                  }`}
+                >
+                  <div className="text-2xl mb-1">{a.emoji}</div>
+                  <div className="text-sm text-gray-900">{a.title}</div>
+                  <div className="text-xs text-gray-600">{a.desc}</div>
                 </div>
-                <Progress value={item.percentage} className="flex-1" />
-                <span className="text-sm text-gray-600 w-8">{item.count}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
+              ))}
+            </div>
+          </Card>
+        )}
 
-        {/* Reviews */}
-        <Card className="p-4">
-          <h3 className="text-gray-900 mb-4">Recent Reviews</h3>
-          <div className="space-y-4">
-            {reviews.map((review) => (
-              <div key={review.id} className="pb-4 border-b border-gray-100 last:border-0 last:pb-0">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-900">{review.author}</span>
-                    <div className="flex">
-                      {[...Array(review.rating)].map((_, i) => (
-                        <Star key={i} className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                      ))}
-                    </div>
-                  </div>
-                  <span className="text-sm text-gray-500">{review.date}</span>
-                </div>
-                <p className="text-sm text-gray-600">{review.comment}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Report button */}
-        <Button variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50">
-          Report User
-        </Button>
+        {/* Report button — only show when viewing someone else's profile */}
+        {!isOwnProfile && (
+          <Button variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50">
+            Report User
+          </Button>
+        )}
       </div>
     </div>
   );

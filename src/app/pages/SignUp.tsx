@@ -7,6 +7,7 @@ import { Bike, Package, Eye, EyeOff, ArrowLeft, Camera, CreditCard, CheckCircle,
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { UserType } from "../types";
+import { getAuth } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, updateDoc } from "firebase/firestore";
 import { storage, db } from "../lib/firebase";
@@ -40,7 +41,6 @@ export default function SignUp() {
   const [idPreview, setIdPreview] = useState<string | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
-  const [createdUid, setCreatedUid] = useState<string | null>(null);
 
   const idInputRef = useRef<HTMLInputElement>(null);
   const selfieInputRef = useRef<HTMLInputElement>(null);
@@ -92,8 +92,6 @@ export default function SignUp() {
     }
     setVerifying(true);
     try {
-      // Get current user UID from Firebase Auth
-      const { getAuth } = await import("firebase/auth");
       const uid = getAuth().currentUser?.uid;
       if (!uid) throw new Error("Not authenticated.");
 
