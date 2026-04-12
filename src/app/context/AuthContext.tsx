@@ -21,6 +21,9 @@ export interface AuthUser {
   verified: boolean;
   joinedDate: string;
   bikeType?: string;
+  idVerificationStatus?: "pending" | "approved" | "rejected";
+  idPhotoUrl?: string;
+  selfieUrl?: string;
 }
 
 // Shape stored in Firestore at users/{uid}
