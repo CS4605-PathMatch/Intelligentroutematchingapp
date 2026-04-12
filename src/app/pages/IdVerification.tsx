@@ -8,9 +8,11 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, updateDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { storage, db } from "../lib/firebase";
+import { useAuth } from "../context/AuthContext";
 
 export default function IdVerification() {
   const navigate = useNavigate();
+  const { updateUser } = useAuth();
 
   const [idPhoto, setIdPhoto] = useState<File | null>(null);
   const [selfie, setSelfie] = useState<File | null>(null);
@@ -54,9 +56,11 @@ export default function IdVerification() {
       await updateDoc(doc(db, "users", uid), {
         "cyclist.idPhotoUrl": idUrl,
         "cyclist.selfieUrl": selfieUrl,
+        "cyclist.avatar": selfieUrl,
         "cyclist.idVerificationStatus": "pending",
       });
 
+      updateUser({ avatar: selfieUrl, idVerificationStatus: "pending" });
       toast.success("Verification submitted! We'll review your ID shortly.");
       navigate(-1);
     } catch (err: any) {

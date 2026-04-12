@@ -38,6 +38,7 @@ interface AuthContextValue {
   login: (email: string, password: string, role: UserType) => Promise<void>;
   signup: (name: string, email: string, password: string, role: UserType, bikeType?: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (updates: Partial<AuthUser>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -131,6 +132,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ ...profile, role });
   };
 
+  const updateUser = (updates: Partial<AuthUser>) => {
+    setUser(prev => prev ? { ...prev, ...updates } : null);
+  };
+
   const logout = async () => {
     await signOut(auth);
     sessionStorage.removeItem("activeRole");
@@ -138,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
