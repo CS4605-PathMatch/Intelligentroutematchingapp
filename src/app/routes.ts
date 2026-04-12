@@ -8,6 +8,7 @@ import CyclistActiveRoute from "./pages/CyclistActiveRoute";
 import CustomerRequestErrand from "./pages/CustomerRequestErrand";
 import CustomerTrackDelivery from "./pages/CustomerTrackDelivery";
 import Profile from "./pages/Profile";
+import IdVerification from "./pages/IdVerification";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export const router = createBrowserRouter([
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
           { path: "customer/request", Component: CustomerRequestErrand },
           { path: "customer/track/:orderId", Component: CustomerTrackDelivery },
           { path: "profile/:userId", Component: Profile },
+          { path: "cyclist/verify-id", Component: IdVerification },
         ],
       },
     ],

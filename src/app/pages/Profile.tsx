@@ -11,6 +11,7 @@ import {
   Shield,
   Award,
   Calendar,
+  CreditCard,
 } from "lucide-react";
 import { useAuth, AuthUser } from "../context/AuthContext";
 import { useCyclistStats } from "../hooks/useCyclistStats";
@@ -182,6 +183,57 @@ export default function Profile() {
             </div>
           </div>
         </Card>
+
+        {/* ID verification banner for own cyclist profile */}
+        {isOwnProfile && profileUser.role === "cyclist" && verificationStatus !== "approved" && (
+          <div className={`rounded-xl p-4 flex items-start gap-3 ${
+            verificationStatus === "pending"
+              ? "bg-yellow-50 border border-yellow-200"
+              : verificationStatus === "rejected"
+              ? "bg-red-50 border border-red-200"
+              : "bg-blue-50 border border-blue-200"
+          }`}>
+            <CreditCard className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+              verificationStatus === "pending" ? "text-yellow-600" :
+              verificationStatus === "rejected" ? "text-red-600" : "text-blue-600"
+            }`} />
+            <div className="flex-1">
+              <div className={`text-sm font-medium mb-1 ${
+                verificationStatus === "pending" ? "text-yellow-800" :
+                verificationStatus === "rejected" ? "text-red-800" : "text-blue-800"
+              }`}>
+                {verificationStatus === "pending"
+                  ? "ID verification under review"
+                  : verificationStatus === "rejected"
+                  ? "ID verification rejected"
+                  : "Verify your identity"}
+              </div>
+              <div className={`text-xs mb-3 ${
+                verificationStatus === "pending" ? "text-yellow-700" :
+                verificationStatus === "rejected" ? "text-red-700" : "text-blue-700"
+              }`}>
+                {verificationStatus === "pending"
+                  ? "We're reviewing your documents. This usually takes 1–2 business days."
+                  : verificationStatus === "rejected"
+                  ? "Your submission was rejected. Please resubmit with clearer photos."
+                  : "Submit your ID and a selfie to become a verified cyclist."}
+              </div>
+              {verificationStatus !== "pending" && (
+                <Button
+                  onClick={() => navigate("/cyclist/verify-id")}
+                  size="sm"
+                  className={
+                    verificationStatus === "rejected"
+                      ? "bg-red-600 hover:bg-red-700 h-8 text-xs"
+                      : "bg-blue-600 hover:bg-blue-700 h-8 text-xs"
+                  }
+                >
+                  {verificationStatus === "rejected" ? "Resubmit documents" : "Verify now"}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Verification & Safety */}
         <Card className="p-4">
