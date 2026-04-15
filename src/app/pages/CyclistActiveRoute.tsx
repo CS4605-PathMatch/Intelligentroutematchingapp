@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Errand, Location } from "../types";
-import { collection, addDoc, updateDoc, doc, query, where, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, onSnapshot, increment } from "firebase/firestore";
 
 import { db } from "../lib/firebase";
 import { useAuth } from "../context/AuthContext";
@@ -215,6 +215,9 @@ export default function CyclistActiveRoute() {
             updateDoc(doc(db, "errands", errand.id), {
               status: "completed",
               completedAt: new Date().toISOString(),
+            }),
+            updateDoc(doc(db, "users", errand.customerId), {
+              "customer.totalTrips": increment(1),
             }),
             ...(user ? [addDoc(collection(db, "users", user.id, "rides"), {
               errandId: errand.id,
