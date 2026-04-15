@@ -16,11 +16,9 @@ import {
   RotateCcw,
   ArrowRightLeft,
   CheckCircle,
-  KeyRound,
   Clock,
   CalendarClock,
 } from "lucide-react";
-import { Input } from "../components/ui/input";
 import { toast } from "sonner";
 import { Errand, Location } from "../types";
 import { collection, addDoc, updateDoc, doc, query, where, onSnapshot } from "firebase/firestore";
@@ -58,6 +56,7 @@ export default function CyclistActiveRoute() {
     now.setSeconds(0, 0);
     return now.toISOString().slice(0, 16);
   });
+  const [rideCompleted, setRideCompleted] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "errands"), where("status", "==", "pending"));
@@ -77,9 +76,6 @@ export default function CyclistActiveRoute() {
   const [endAddress, setEndAddress] = useState("");
   const [startLocation, setStartLocation] = useState<Location | null>(null);
   const [endLocation, setEndLocation] = useState<Location | null>(null);
-  const [completingErrandId, setCompletingErrandId] = useState<string | null>(null);
-  const [codeInput, setCodeInput] = useState("");
-  const [codeError, setCodeError] = useState(false);
 
   const handleAcceptErrand = async (errandId: string) => {
     const errand = errands.find(e => e.id === errandId);
@@ -198,45 +194,81 @@ export default function CyclistActiveRoute() {
     setQueuedErrands(prev => prev.filter(e => e.id !== errandId));
   };
 
-  const handleCompleteErrand = async () => {
-    if (!completingErrandId || !user) return;
-    const errand = queuedErrands.find(e => e.id === completingErrandId);
-    if (!errand) return;
+  const COMPLETION_RADIUS_KM = 0.3; // 300 metres
 
-    if (codeInput.trim() !== errand.confirmationCode) {
-      setCodeError(true);
+  const handleCompleteErrand = (errand: Errand) => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported on this device.");
       return;
     }
+    toast("Checking your location...");
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const cyclistLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude, address: "" } as Location;
+        const distKm = haversineKm(cyclistLoc, errand.dropoffLocation);
+        if (distKm > COMPLETION_RADIUS_KM) {
+          toast.error(`You're ${(distKm * 1000).toFixed(0)} m from the dropoff. Get within 300 m to complete.`);
+          return;
+        }
+        try {
+          await Promise.all([
+            updateDoc(doc(db, "errands", errand.id), {
+              status: "completed",
+              completedAt: new Date().toISOString(),
+            }),
+            ...(user ? [addDoc(collection(db, "users", user.id, "rides"), {
+              errandId: errand.id,
+              earnings: errand.payment,
+              tip: errand.tip ?? 0,
+              completedAt: new Date().toISOString(),
+              description: errand.description,
+              from: errand.pickupLocation.address,
+              to: errand.dropoffLocation.address,
+              status: "completed",
+            })] : []),
+          ]);
+          setQueuedErrands(prev => prev.filter(e => e.id !== errand.id));
+          toast.success(`Delivery complete! +$${(errand.payment + (errand.tip ?? 0)).toFixed(2)}`);
+        } catch {
+          toast.error("Failed to complete errand.");
+        }
+      },
+      () => toast.error("Could not get your location. Please enable GPS."),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
-    try {
-      await Promise.all([
-        updateDoc(doc(db, "errands", completingErrandId), {
-          status: "completed",
-          completedAt: new Date().toISOString(),
-        }),
-        addDoc(collection(db, "users", user.id, "rides"), {
-          errandId: completingErrandId,
-          earnings: errand.payment,
-          tip: errand.tip ?? 0,
-          completedAt: new Date().toISOString(),
-          description: errand.description,
-          from: errand.pickupLocation.address,
-          to: errand.dropoffLocation.address,
-          status: "completed",
-        }),
-      ]);
-      setQueuedErrands(prev => prev.filter(e => e.id !== completingErrandId));
-      setCompletingErrandId(null);
-      setCodeInput("");
-      setCodeError(false);
-      toast.success("Errand completed! Payment released.");
-    } catch {
-      toast.error("Failed to complete errand.");
+  const handleEndTrip = () => {
+    const destination = routeMode === "round-trip" ? startLocation : endLocation;
+    if (!destination) {
+      toast.error("No destination set to verify against.");
+      return;
     }
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported on this device.");
+      return;
+    }
+    toast("Verifying your location...");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const cyclistLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude, address: "" } as Location;
+        const distKm = haversineKm(cyclistLoc, destination);
+        if (distKm > COMPLETION_RADIUS_KM) {
+          toast.error(
+            `You're ${(distKm * 1000).toFixed(0)} m from your ${routeMode === "round-trip" ? "start" : "end"} point. Get within 300 m to end the trip.`
+          );
+          return;
+        }
+        setRideCompleted(true);
+        toast.success("Trip complete! Location verified.");
+      },
+      () => toast.error("Could not get your location. Please enable GPS."),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-6" style={{ paddingBottom: queuedErrands.length > 0 && !routeStarted ? "120px" : "24px" }}>
+    <div className="min-h-screen bg-gray-50 pb-6" style={{ paddingBottom: queuedErrands.length > 0 && !routeStarted ? "120px" : routeStarted && !rideCompleted ? "88px" : "24px" }}>
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
@@ -451,17 +483,17 @@ export default function CyclistActiveRoute() {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <span className="text-green-700 text-xs">+${(e.payment + (e.tip ?? 0)).toFixed(2)}</span>
-                    {!routeStarted ? (
-                      <button onClick={() => handleRemoveErrand(e.id)} className="text-gray-400 hover:text-red-500">
-                        <X className="w-3 h-3" />
-                      </button>
-                    ) : (
+                    {routeStarted ? (
                       <button
-                        onClick={() => { setCompletingErrandId(e.id); setCodeInput(""); setCodeError(false); }}
-                        className="flex items-center gap-1 bg-green-600 text-white text-xs px-2 py-1 rounded-lg ml-1"
+                        onClick={() => handleCompleteErrand(e)}
+                        className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-0.5 rounded-full"
                       >
                         <CheckCircle className="w-3 h-3" />
-                        Complete
+                        Done
+                      </button>
+                    ) : (
+                      <button onClick={() => handleRemoveErrand(e.id)} className="text-gray-400 hover:text-red-500">
+                        <X className="w-3 h-3" />
                       </button>
                     )}
                   </div>
@@ -542,56 +574,28 @@ export default function CyclistActiveRoute() {
         )}
       </div>
 
-      {/* Completion code modal */}
-      {completingErrandId && (() => {
-        const errand = queuedErrands.find(e => e.id === completingErrandId);
-        if (!errand) return null;
-        return (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-green-100 rounded-full p-2">
-                  <KeyRound className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <div className="text-gray-900">Confirm Delivery</div>
-                  <div className="text-sm text-gray-500 truncate">{errand.description}</div>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600 mb-4">
-                Ask the customer for their 4-digit confirmation code to complete this delivery and release payment.
-              </p>
-              <Input
-                type="number"
-                placeholder="Enter 4-digit code"
-                value={codeInput}
-                onChange={e => { setCodeInput(e.target.value); setCodeError(false); }}
-                className={`text-center text-2xl tracking-widest h-14 mb-2 ${codeError ? "border-red-500" : ""}`}
-                maxLength={4}
-              />
-              {codeError && (
-                <p className="text-sm text-red-500 text-center mb-3">Incorrect code. Ask the customer to check their app.</p>
-              )}
-              <div className="flex gap-3 mt-4">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => { setCompletingErrandId(null); setCodeInput(""); setCodeError(false); }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                  onClick={handleCompleteErrand}
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Confirm
-                </Button>
-              </div>
-            </div>
+      {/* Ride completed banner */}
+      {rideCompleted && (
+        <div className="mx-4 mb-4 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+          <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
+          <div>
+            <div className="text-green-900">Ride complete!</div>
+            <div className="text-sm text-green-700">Location verified. You earned <span className="font-medium">${totalEarnings.toFixed(2)}</span> today.</div>
           </div>
-        );
-      })()}
+        </div>
+      )}
+
+      {/* Sticky End Trip bar */}
+      {routeStarted && !rideCompleted && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-xl">
+          <Button
+            onClick={handleEndTrip}
+            className="w-full bg-red-600 hover:bg-red-700 h-12 text-base"
+          >
+            End Trip & Verify Location
+          </Button>
+        </div>
+      )}
 
       {/* Sticky Start Trip bar */}
       {queuedErrands.length > 0 && !routeStarted && (
