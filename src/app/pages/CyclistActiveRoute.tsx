@@ -17,6 +17,8 @@ import {
   ArrowRightLeft,
   CheckCircle,
   KeyRound,
+  Clock,
+  CalendarClock,
 } from "lucide-react";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
@@ -50,6 +52,12 @@ export default function CyclistActiveRoute() {
   const [routeMode, setRouteMode] = useState<RouteMode>("point-to-point");
   const [roundTripKm, setRoundTripKm] = useState(10);
   const [maxDetourKm, setMaxDetourKm] = useState(2);
+  const [departureMode, setDepartureMode] = useState<"now" | "scheduled">("now");
+  const [scheduledTime, setScheduledTime] = useState<string>(() => {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    return now.toISOString().slice(0, 16);
+  });
 
   useEffect(() => {
     const q = query(collection(db, "errands"), where("status", "==", "pending"));
@@ -108,6 +116,14 @@ export default function CyclistActiveRoute() {
 
   const queuedIds = new Set(queuedErrands.map(e => e.id));
 
+  const departureTime = departureMode === "now" ? new Date() : new Date(scheduledTime);
+
+  const urgencyWindowMinutes: Record<string, number> = {
+    urgent: 30,
+    soon: 60,
+    flexible: 240,
+  };
+
   const scoreErrand = (e: Errand): Pick<Errand, "deviation" | "matchScore"> => {
     if (routeMode === "round-trip") {
       if (!startLocation) return { deviation: 0, matchScore: 50 };
@@ -147,6 +163,10 @@ export default function CyclistActiveRoute() {
 
   const availableErrands = errands
     .filter(e => !queuedIds.has(e.id))
+    .filter(e => {
+      const windowMs = (urgencyWindowMinutes[e.urgency] ?? 120) * 60 * 1000;
+      return new Date(e.requestedTime).getTime() + windowMs > Date.now();
+    })
     .filter(e => filterUrgency === "all" || e.urgency === filterUrgency)
     .filter(e => {
       if (routeMode === "round-trip") {
@@ -166,7 +186,10 @@ export default function CyclistActiveRoute() {
         haversineKm(e.dropoffLocation, endLocation);
       return withErrand - directDist <= maxDetourKm;
     })
-    .map(e => ({ ...e, ...scoreErrand(e) }))
+    .map(e => {
+      const timingDiff = Math.abs(new Date(e.requestedTime).getTime() - departureTime.getTime()) / 60000;
+      return { ...e, timingDiff, ...scoreErrand(e) };
+    })
     .sort((a, b) => b.matchScore - a.matchScore);
 
   const totalEarnings = queuedErrands.reduce((sum, e) => sum + e.payment + (e.tip || 0), 0);
@@ -217,7 +240,7 @@ export default function CyclistActiveRoute() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
-          <button 
+          <button
             onClick={() => navigate("/cyclist")}
             className="flex items-center gap-2 text-gray-600"
           >
@@ -368,6 +391,44 @@ export default function CyclistActiveRoute() {
                 </div>
               </div>
             )}
+
+            {/* Departure time */}
+            <div className="space-y-2">
+              <div className="text-xs text-gray-500">Departure</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDepartureMode("now")}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition ${
+                    departureMode === "now"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-200"
+                  }`}
+                >
+                  <Clock className="w-4 h-4" />
+                  Leave Now
+                </button>
+                <button
+                  onClick={() => setDepartureMode("scheduled")}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition ${
+                    departureMode === "scheduled"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-200"
+                  }`}
+                >
+                  <CalendarClock className="w-4 h-4" />
+                  Schedule
+                </button>
+              </div>
+              {departureMode === "scheduled" && (
+                <input
+                  type="datetime-local"
+                  value={scheduledTime}
+                  min={new Date().toISOString().slice(0, 16)}
+                  onChange={e => setScheduledTime(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              )}
+            </div>
           </div>
 
           {queuedErrands.length > 0 && (
@@ -456,10 +517,8 @@ export default function CyclistActiveRoute() {
             <div className="text-blue-900 mb-1">Smart Matching Algorithm</div>
             <div className="text-blue-700">
               {routeMode === "round-trip"
-                ? `Errands are filtered to those whose full round-trip (pickup + dropoff + return) fits within your ${roundTripKm} km limit. Higher scores mean less total distance.`
-                : startLocation && endLocation
-                  ? `Errands are filtered to those adding ≤ ${maxDetourKm} km of detour to your direct route. Score = 100 − (detour ÷ ${maxDetourKm} km). Set a smaller max detour for tighter matches.`
-                  : "Set your start and destination to filter errands by detour distance. Errands on or near your path score highest."}
+                ? `All errands ranked by fit against your ${roundTripKm} km round-trip budget: Great = detour under 15% of budget and timing within 10 min · Good = detour 15–35% and timing within 20 min · Bad = detour over 35% or timing mismatch.`
+                : "Errands ranked by route alignment and timing. Great = detour under 15% of your route and timing within 10 min · Good = detour 15–35% and timing within 20 min · Bad = detour over 35% or timing mismatch."}
             </div>
           </div>
         </div>
@@ -467,9 +526,9 @@ export default function CyclistActiveRoute() {
         {/* Errand list */}
         <div className="space-y-3">
           {availableErrands.map((errand) => (
-            <ErrandCard 
-              key={errand.id} 
-              errand={errand} 
+            <ErrandCard
+              key={errand.id}
+              errand={errand}
               onAccept={handleAcceptErrand}
               showMatchScore={true}
             />

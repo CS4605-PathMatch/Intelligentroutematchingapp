@@ -10,6 +10,7 @@ import CustomerRequestErrand from "./pages/CustomerRequestErrand";
 import CustomerTrackDelivery from "./pages/CustomerTrackDelivery";
 import CustomerOrders from "./pages/CustomerOrders";
 import Profile from "./pages/Profile";
+import IdVerification from "./pages/IdVerification";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export const router = createBrowserRouter([
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
           { path: "customer/track/:orderId", Component: CustomerTrackDelivery },
           { path: "customer/orders", Component: CustomerOrders },
           { path: "profile/:userId", Component: Profile },
+          { path: "cyclist/verify-id", Component: IdVerification },
         ],
       },
     ],

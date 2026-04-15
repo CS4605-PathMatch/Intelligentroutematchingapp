@@ -45,6 +45,7 @@ export interface Errand {
   confirmationCode?: string;
   deviation: number; // in km
   matchScore: number; // 0-100
+  timingDiff?: number; // minutes between departure and errand's requested time
 }
 
 export interface DeliveryTracking {

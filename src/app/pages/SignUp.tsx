@@ -43,8 +43,12 @@ export default function SignUp() {
     setLoading(true);
     try {
       await signup(name, email, password, role, role === "cyclist" ? bikeType : undefined);
-      toast.success("Account created! Welcome to PathMatch.");
-      navigate(role === "cyclist" ? "/cyclist" : "/customer");
+      if (role === "cyclist") {
+        navigate("/cyclist/verify-id");
+      } else {
+        toast.success("Account created! Welcome to PathMatch.");
+        navigate("/customer");
+      }
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -55,7 +59,6 @@ export default function SignUp() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-green-50">
       <div className="max-w-sm w-full space-y-6">
-        {/* Back */}
         <button
           onClick={() => navigate("/")}
           className="flex items-center gap-2 text-gray-600 text-sm"
@@ -64,7 +67,6 @@ export default function SignUp() {
           Back
         </button>
 
-        {/* Logo */}
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center">
             <div className="bg-gradient-to-r from-blue-600 to-green-600 p-3 rounded-full">
@@ -101,7 +103,21 @@ export default function SignUp() {
           </button>
         </div>
 
-        {/* Form */}
+        {/* Progress indicator for cyclists */}
+        {role === "cyclist" && (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">1</div>
+              <span className="text-xs text-blue-600">Basic info</span>
+            </div>
+            <div className="flex-1 h-px bg-gray-200" />
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-400 text-xs flex items-center justify-center">2</div>
+              <span className="text-xs text-gray-400">ID verification</span>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 shadow-lg space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Full name</Label>
@@ -170,7 +186,6 @@ export default function SignUp() {
             </div>
           </div>
 
-          {/* Cyclist-only: bike type */}
           {role === "cyclist" && (
             <div className="space-y-2">
               <Label htmlFor="bikeType">Bike type</Label>
@@ -196,7 +211,7 @@ export default function SignUp() {
                 : "bg-green-600 hover:bg-green-700"
             }`}
           >
-            {loading ? "Creating account..." : "Create Account"}
+            {loading ? "Creating account..." : role === "cyclist" ? "Next: Verify ID" : "Create Account"}
           </Button>
         </form>
 

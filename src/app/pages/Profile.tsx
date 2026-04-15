@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Progress } from "../components/ui/progress";
@@ -11,87 +14,75 @@ import {
   TrendingUp,
   Calendar,
   Bike,
+  CreditCard,
 } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
-import { useAuth } from "../context/AuthContext";
+import { useAuth, AuthUser } from "../context/AuthContext";
 import { useCyclistStats } from "../hooks/useCyclistStats";
-import { AuthUser } from "../context/AuthContext";
-
-interface ProfileData extends Omit<AuthUser, "role"> {
-  role: "cyclist" | "customer";
-}
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { userId } = useParams<{ userId: string }>();
-  const { user: currentUser } = useAuth();
-  const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { userId } = useParams();
+  const { user: authUser } = useAuth();
 
-  // Always call the hook — only use results if it's a cyclist
-  const { stats, rides } = useCyclistStats(
-    profile?.role === "cyclist" ? profile.id : undefined
-  );
+  const [profileUser, setProfileUser] = useState<AuthUser | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  const isOwnProfile = authUser?.id === userId;
 
   useEffect(() => {
+    if (isOwnProfile && authUser) {
+      setProfileUser(authUser);
+      setLoadingProfile(false);
+      return;
+    }
     if (!userId) return;
     getDoc(doc(db, "users", userId)).then((snap) => {
-      if (!snap.exists()) {
-        setLoading(false);
-        return;
+      if (snap.exists()) {
+        const data = snap.data();
+        const profile = data.cyclist ?? data.customer ?? null;
+        if (profile) {
+          const role = data.cyclist ? "cyclist" : "customer";
+          setProfileUser({ ...profile, role });
+        }
       }
-      const data = snap.data();
-      // If viewing own profile, show current role; otherwise prefer cyclist
-      let roleData: ProfileData | null = null;
-      if (currentUser?.id === userId) {
-        const roleProfile = data[currentUser.role];
-        if (roleProfile) roleData = { ...roleProfile, role: currentUser.role };
-      } else {
-        if (data.cyclist) roleData = { ...data.cyclist, role: "cyclist" };
-        else if (data.customer) roleData = { ...data.customer, role: "customer" };
-      }
-      setProfile(roleData);
-      setLoading(false);
+      setLoadingProfile(false);
     });
-  }, [userId, currentUser]);
+  }, [userId, isOwnProfile, authUser]);
 
-  const isCyclist = profile?.role === "cyclist";
-  const isOwnProfile = currentUser?.id === userId;
+  const { stats, rides } = useCyclistStats(
+    profileUser?.role === "cyclist" ? profileUser.id : undefined
+  );
 
-  // Dynamically compute achievements for cyclists
-  const achievements = isCyclist
-    ? [
-        stats.totalRides >= 100 && {
-          emoji: "🚴",
-          title: "Century Club",
-          desc: "100+ deliveries",
-          color: "from-blue-50 to-purple-50 border-blue-200",
-        },
-        (profile?.rating ?? 0) >= 4.8 && {
-          emoji: "⭐",
-          title: "Top Rated",
-          desc: "4.8+ rating",
-          color: "from-yellow-50 to-orange-50 border-yellow-200",
-        },
-        stats.totalRides >= 10 && {
-          emoji: "⚡",
-          title: "Getting Started",
-          desc: "10+ deliveries",
-          color: "from-green-50 to-emerald-50 border-green-200",
-        },
-        stats.totalRides >= 50 && {
-          emoji: "🌱",
-          title: "Eco Warrior",
-          desc: "50+ eco deliveries",
-          color: "from-pink-50 to-red-50 border-pink-200",
-        },
-      ].filter(Boolean)
-    : [];
+  if (loadingProfile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-500">Loading profile...</div>
+      </div>
+    );
+  }
 
-  // Mock rating breakdown derived from real rating
-  const rating = profile?.rating ?? 5;
-  const totalTrips = profile?.totalTrips ?? 0;
+  if (!profileUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-500">User not found.</div>
+      </div>
+    );
+  }
+
+  const isCyclist = profileUser.role === "cyclist";
+  const verificationStatus = profileUser.idVerificationStatus;
+  const verificationBadge =
+    verificationStatus === "approved"
+      ? { label: "Verified", classes: "bg-green-100 text-green-700" }
+      : verificationStatus === "pending"
+      ? { label: "Pending review", classes: "bg-yellow-100 text-yellow-700" }
+      : verificationStatus === "rejected"
+      ? { label: "Rejected", classes: "bg-red-100 text-red-700" }
+      : { label: "Not submitted", classes: "bg-gray-100 text-gray-500" };
+
+  const rating = profileUser.rating ?? 5;
+  const totalTrips = profileUser.totalTrips ?? 0;
+
   const ratingBreakdown = [
     { stars: 5, count: Math.round(totalTrips * 0.77), percentage: 77 },
     { stars: 4, count: Math.round(totalTrips * 0.17), percentage: 17 },
@@ -100,21 +91,40 @@ export default function Profile() {
     { stars: 1, count: 0, percentage: 0 },
   ];
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">Loading profile...</div>
-      </div>
-    );
-  }
-
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">User not found.</div>
-      </div>
-    );
-  }
+  const achievements = [
+    {
+      emoji: "🚴",
+      title: "Century Club",
+      desc: "100+ deliveries",
+      earned: stats.totalRides >= 100,
+      gradient: "from-blue-50 to-purple-50",
+      border: "border-blue-200",
+    },
+    {
+      emoji: "⭐",
+      title: "Top Rated",
+      desc: "4.8+ rating",
+      earned: rating >= 4.8,
+      gradient: "from-yellow-50 to-orange-50",
+      border: "border-yellow-200",
+    },
+    {
+      emoji: "⚡",
+      title: "Speed Demon",
+      desc: "50+ deliveries",
+      earned: stats.totalRides >= 50,
+      gradient: "from-green-50 to-emerald-50",
+      border: "border-green-200",
+    },
+    {
+      emoji: "🌱",
+      title: "Eco Warrior",
+      desc: "10+ deliveries",
+      earned: stats.totalRides >= 10,
+      gradient: "from-pink-50 to-red-50",
+      border: "border-pink-200",
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 pb-6">
@@ -138,14 +148,16 @@ export default function Profile() {
         <Card className="p-6">
           <div className="flex items-start gap-4 mb-4">
             <img
-              src={profile.avatar}
-              alt={profile.name}
-              className="w-20 h-20 rounded-full"
+              src={profileUser.avatar}
+              alt={profileUser.name}
+              className="w-20 h-20 rounded-full object-cover"
             />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-xl text-gray-900">{profile.name}</h2>
-                {profile.verified && <Shield className="w-5 h-5 text-blue-600" />}
+                <h2 className="text-xl text-gray-900">{profileUser.name}</h2>
+                {profileUser.verified && (
+                  <Shield className="w-5 h-5 text-blue-600" />
+                )}
               </div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex items-center gap-1">
@@ -158,17 +170,17 @@ export default function Profile() {
                   {isCyclist ? "deliveries" : "orders"}
                 </span>
               </div>
-              {isCyclist && profile.bikeType && (
+              {isCyclist && profileUser.bikeType && (
                 <div className="flex items-center gap-1 text-sm text-gray-500 mb-1">
                   <Bike className="w-3 h-3" />
-                  <span>{profile.bikeType}</span>
+                  <span>{profileUser.bikeType}</span>
                 </div>
               )}
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <Calendar className="w-3 h-3" />
                 <span>
                   Joined{" "}
-                  {new Date(profile.joinedDate).toLocaleDateString("en-US", {
+                  {new Date(profileUser.joinedDate).toLocaleDateString("en-US", {
                     month: "long",
                     year: "numeric",
                   })}
@@ -197,57 +209,107 @@ export default function Profile() {
           )}
         </Card>
 
-        {/* Verification */}
+        {/* ID verification banner for own cyclist profile */}
+        {isOwnProfile && isCyclist && verificationStatus !== "approved" && (
+          <div className={`rounded-xl p-4 flex items-start gap-3 ${
+            verificationStatus === "pending"
+              ? "bg-yellow-50 border border-yellow-200"
+              : verificationStatus === "rejected"
+              ? "bg-red-50 border border-red-200"
+              : "bg-blue-50 border border-blue-200"
+          }`}>
+            <CreditCard className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+              verificationStatus === "pending" ? "text-yellow-600" :
+              verificationStatus === "rejected" ? "text-red-600" : "text-blue-600"
+            }`} />
+            <div className="flex-1">
+              <div className={`text-sm font-medium mb-1 ${
+                verificationStatus === "pending" ? "text-yellow-800" :
+                verificationStatus === "rejected" ? "text-red-800" : "text-blue-800"
+              }`}>
+                {verificationStatus === "pending"
+                  ? "ID verification under review"
+                  : verificationStatus === "rejected"
+                  ? "ID verification rejected"
+                  : "Verify your identity"}
+              </div>
+              <div className={`text-xs mb-3 ${
+                verificationStatus === "pending" ? "text-yellow-700" :
+                verificationStatus === "rejected" ? "text-red-700" : "text-blue-700"
+              }`}>
+                {verificationStatus === "pending"
+                  ? "We're reviewing your documents. This usually takes 1–2 business days."
+                  : verificationStatus === "rejected"
+                  ? "Your submission was rejected. Please resubmit with clearer photos."
+                  : "Submit your ID and a selfie to become a verified cyclist."}
+              </div>
+              {verificationStatus !== "pending" && (
+                <Button
+                  onClick={() => navigate("/cyclist/verify-id")}
+                  size="sm"
+                  className={
+                    verificationStatus === "rejected"
+                      ? "bg-red-600 hover:bg-red-700 h-8 text-xs"
+                      : "bg-blue-600 hover:bg-blue-700 h-8 text-xs"
+                  }
+                >
+                  {verificationStatus === "rejected" ? "Resubmit documents" : "Verify now"}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Verification & Safety */}
         <Card className="p-4">
           <h3 className="text-gray-900 mb-3 flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-600" />
             Verification & Safety
           </h3>
           <div className="space-y-2">
-            {[
-              { label: "Identity verified", done: profile.verified },
-              { label: "Phone number", done: true },
-              { label: "Email address", done: true },
-            ].map(({ label, done }) => (
-              <div key={label} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      done ? "bg-green-100" : "bg-gray-100"
-                    }`}
-                  >
-                    <Shield
-                      className={`w-4 h-4 ${done ? "text-green-600" : "text-gray-400"}`}
-                    />
-                  </div>
-                  <span className="text-sm text-gray-900">{label}</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  verificationStatus === "approved" ? "bg-green-100" :
+                  verificationStatus === "pending" ? "bg-yellow-100" : "bg-gray-100"
+                }`}>
+                  <Shield className={`w-4 h-4 ${
+                    verificationStatus === "approved" ? "text-green-600" :
+                    verificationStatus === "pending" ? "text-yellow-600" : "text-gray-400"
+                  }`} />
                 </div>
-                <Badge
-                  className={
-                    done
-                      ? "bg-green-100 text-green-700"
-                      : "bg-gray-100 text-gray-500"
-                  }
-                >
-                  {done ? "Verified" : "Pending"}
-                </Badge>
+                <span className="text-sm text-gray-900">Identity verification</span>
               </div>
-            ))}
+              <Badge className={verificationBadge.classes}>{verificationBadge.label}</Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${profileUser.verified ? "bg-green-100" : "bg-gray-100"}`}>
+                  <Shield className={`w-4 h-4 ${profileUser.verified ? "text-green-600" : "text-gray-400"}`} />
+                </div>
+                <span className="text-sm text-gray-900">Account verified</span>
+              </div>
+              <Badge className={profileUser.verified ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}>
+                {profileUser.verified ? "Verified" : "Unverified"}
+              </Badge>
+            </div>
           </div>
         </Card>
 
         {/* Achievements — cyclists only */}
-        {isCyclist && achievements.length > 0 && (
+        {isCyclist && (
           <Card className="p-4">
             <h3 className="text-gray-900 mb-3 flex items-center gap-2">
               <Award className="w-5 h-5 text-purple-600" />
               Achievements
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              {(achievements as { emoji: string; title: string; desc: string; color: string }[]).map((a) => (
+              {achievements.map((a) => (
                 <div
                   key={a.title}
-                  className={`bg-gradient-to-br ${a.color} rounded-lg p-3 border`}
+                  className={`bg-gradient-to-br ${a.gradient} rounded-lg p-3 border ${a.border} ${
+                    !a.earned ? "opacity-40 grayscale" : ""
+                  }`}
                 >
                   <div className="text-2xl mb-1">{a.emoji}</div>
                   <div className="text-sm text-gray-900">{a.title}</div>
@@ -316,9 +378,9 @@ export default function Profile() {
 
         {/* Report button — only when viewing another user */}
         {!isOwnProfile && (
-          <button className="w-full py-3 text-sm text-red-500 border border-red-200 rounded-xl hover:bg-red-50 transition">
+          <Button variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50">
             Report User
-          </button>
+          </Button>
         )}
       </div>
     </div>
