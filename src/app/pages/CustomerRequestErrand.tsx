@@ -162,7 +162,7 @@ export default function CustomerRequestErrand() {
           </Label>
           <PlacesAutocomplete
             value={pickupAddress}
-            onChange={setPickupAddress}
+            onChange={(val) => { setPickupAddress(val); setPickupLocation(null); }}
             onPlaceSelect={(loc) => {
               setPickupLocation(loc);
               setPickupAddress(loc.address);
@@ -179,7 +179,7 @@ export default function CustomerRequestErrand() {
           </Label>
           <PlacesAutocomplete
             value={dropoffAddress}
-            onChange={setDropoffAddress}
+            onChange={(val) => { setDropoffAddress(val); setDropoffLocation(null); }}
             onPlaceSelect={(loc) => {
               setDropoffLocation(loc);
               setDropoffAddress(loc.address);
