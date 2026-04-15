@@ -57,7 +57,7 @@ export default function CustomerDashboard() {
                 <Star className="w-3 h-3 fill-white" />
                 <span>{user?.rating}</span>
                 <span className="mx-1">•</span>
-                <span>{user?.totalTrips} orders</span>
+                <span>{orders.filter(o => o.status === "completed").length} orders</span>
               </div>
             </div>
           </div>
