@@ -15,6 +15,7 @@ import {
   Calendar,
   Bike,
   CreditCard,
+  User,
 } from "lucide-react";
 import { useAuth, AuthUser } from "../context/AuthContext";
 import { useCyclistStats } from "../hooks/useCyclistStats";
@@ -147,11 +148,9 @@ export default function Profile() {
         {/* Profile header */}
         <Card className="p-6">
           <div className="flex items-start gap-4 mb-4">
-            <img
-              src={profileUser.avatar}
-              alt={profileUser.name}
-              className="w-20 h-20 rounded-full object-cover"
-            />
+            <div className="w-20 h-20 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
+              <User className="w-10 h-10 text-gray-400" />
+            </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-xl text-gray-900">{profileUser.name}</h2>

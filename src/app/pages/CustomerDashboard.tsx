@@ -41,11 +41,9 @@ export default function CustomerDashboard() {
       <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 pb-8 rounded-b-3xl shadow-lg">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <img
-              src={user?.avatar}
-              alt={user?.name}
-              className="w-12 h-12 rounded-full border-2 border-white"
-            />
+            <div className="w-12 h-12 rounded-full border-2 border-white bg-white/20 flex items-center justify-center">
+              <User className="w-7 h-7 text-white" />
+            </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-lg">Hello, {user?.name?.split(' ')[0]}</span>
