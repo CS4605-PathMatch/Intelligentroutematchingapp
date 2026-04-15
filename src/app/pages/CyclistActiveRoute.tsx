@@ -185,9 +185,10 @@ export default function CyclistActiveRoute() {
   };
 
   const handleEndTrip = () => {
-    const destination = routeMode === "round-trip" ? startLocation : endLocation;
+    const lastErrand = queuedErrands[queuedErrands.length - 1];
+    const destination = lastErrand?.dropoffLocation ?? null;
     if (!destination) {
-      toast.error("No destination set to verify against.");
+      toast.error("No errand dropoff location to verify against.");
       return;
     }
     if (!navigator.geolocation) {
@@ -201,7 +202,7 @@ export default function CyclistActiveRoute() {
         const distKm = haversineKm(cyclistLoc, destination);
         if (distKm > COMPLETION_RADIUS_KM) {
           toast.error(
-            `You're ${(distKm * 1000).toFixed(0)} m from your ${routeMode === "round-trip" ? "start" : "end"} point. Get within 300 m to end the trip.`
+            `You're ${(distKm * 1000).toFixed(0)} m from the final dropoff. Get within 300 m to end the trip.`
           );
           return;
         }
