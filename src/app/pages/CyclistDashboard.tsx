@@ -22,7 +22,7 @@ import { db } from "../lib/firebase";
 export default function CyclistDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { stats } = useCyclistStats(user?.id);
+  const { stats, rides } = useCyclistStats(user?.id);
   const [showMenu, setShowMenu] = useState(false);
   const [activeCount, setActiveCount] = useState(0);
 
@@ -56,7 +56,7 @@ export default function CyclistDashboard() {
                 <Star className="w-3 h-3 fill-white" />
                 <span>{user?.rating}</span>
                 <span className="mx-1">•</span>
-                <span>{stats.totalRides} trips</span>
+                <span>{rides.length} trips</span>
               </div>
             </div>
           </div>

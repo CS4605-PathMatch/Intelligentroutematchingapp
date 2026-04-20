@@ -13,6 +13,21 @@ export interface Ride {
   status: string;
 }
 
+/** Firestore may return Timestamp; string compares need ISO strings */
+function toCompletedAtIso(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof (value as { toDate?: () => Date }).toDate === "function"
+  ) {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+  return "";
+}
+
 export interface CyclistStats {
   todayEarnings: number;
   weekEarnings: number;
@@ -48,8 +63,16 @@ export function useCyclistStats(userId: string | undefined) {
 
     const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as Ride))
-        .filter((r) => r.status === "completed");
+        .map((d) => {
+          const raw = d.data() as Record<string, unknown>;
+          const r = { id: d.id, ...raw } as Ride;
+          return {
+            ...r,
+            completedAt: toCompletedAtIso(raw.completedAt),
+            status: typeof raw.status === "string" ? raw.status : "completed",
+          };
+        })
+        .filter((r) => String(r.status).toLowerCase() === "completed");
       setRides(data);
       setLoading(false);
     });
@@ -65,16 +88,19 @@ export function useCyclistStats(userId: string | undefined) {
     (acc, ride) => {
       const total = ride.earnings + (ride.tip ?? 0);
       acc.totalRides += 1;
-      if (ride.completedAt >= dayStart) {
+      const at = ride.completedAt;
+      if (at && at >= dayStart) {
         acc.todayEarnings += total;
         acc.completedToday += 1;
       }
-      if (ride.completedAt >= weekStart) acc.weekEarnings += total;
-      if (ride.completedAt >= monthStart) acc.monthEarnings += total;
+      if (at && at >= weekStart) acc.weekEarnings += total;
+      if (at && at >= monthStart) acc.monthEarnings += total;
       return acc;
     },
     { todayEarnings: 0, weekEarnings: 0, monthEarnings: 0, completedToday: 0, totalRides: 0 }
   );
+
+  stats.totalRides = rides.length;
 
   // Round to 2 decimal places
   stats.todayEarnings = Math.round(stats.todayEarnings * 100) / 100;
