@@ -44,14 +44,22 @@ export default function CustomerRequestErrand() {
     return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   }
 
+  const BASE_RATE = 3;
   const RATE_PER_MI = 3;
+  const URGENCY_SURCHARGE: Record<string, number> = { urgent: 5, soon: 2, flexible: 0 };
+
   const errandDistanceMi =
     pickupLocation && dropoffLocation
       ? Math.round(haversineMi(pickupLocation, dropoffLocation) * 10) / 10
       : null;
-  const estimatedPrice =
+  const distancePrice =
     errandDistanceMi !== null
       ? Math.round(errandDistanceMi * RATE_PER_MI * 100) / 100
+      : null;
+  const urgencySurcharge = URGENCY_SURCHARGE[urgency] ?? 0;
+  const estimatedPrice =
+    distancePrice !== null
+      ? Math.round((BASE_RATE + distancePrice + urgencySurcharge) * 100) / 100
       : null;
 
   const handleSubmit = async () => {
@@ -227,10 +235,22 @@ export default function CustomerRequestErrand() {
           </div>
           <div className="space-y-1 text-sm">
             {estimatedPrice !== null ? (
-              <div className="flex items-center justify-between text-gray-600">
-                <span>Distance ({errandDistanceMi} mi × $3/mi)</span>
-                <span>${estimatedPrice.toFixed(2)}</span>
-              </div>
+              <>
+                <div className="flex items-center justify-between text-gray-600">
+                  <span>Base rate</span>
+                  <span>${BASE_RATE.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between text-gray-600">
+                  <span>Distance ({errandDistanceMi} mi × $3/mi)</span>
+                  <span>${distancePrice!.toFixed(2)}</span>
+                </div>
+                {urgencySurcharge > 0 && (
+                  <div className="flex items-center justify-between text-gray-600">
+                    <span>{urgency === "urgent" ? "Urgent" : "Soon"} surcharge</span>
+                    <span>+${urgencySurcharge.toFixed(2)}</span>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-gray-400 italic">Select pickup and dropoff to see price</div>
             )}
