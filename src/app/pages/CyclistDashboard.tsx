@@ -79,8 +79,14 @@ export default function CyclistDashboard() {
             <div className="text-xs text-blue-100">This Week</div>
           </Card>
           <Card className="bg-white/10 backdrop-blur border-white/20 p-3 text-center">
-            <div className="text-2xl">{stats.completedThisWeek}</div>
-            <div className="text-xs text-blue-100 leading-tight">Completed This Week</div>
+            <div
+              className="text-2xl tabular-nums"
+              title="Deliveries completed this calendar week (Sunday–Saturday)"
+            >
+              {stats.completedThisWeek}
+            </div>
+            <div className="text-xs text-blue-50 font-medium leading-tight mt-1">This Week</div>
+            <div className="text-[10px] text-blue-100/90 leading-tight mt-0.5">completed</div>
           </Card>
         </div>
       </div>
