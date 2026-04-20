@@ -33,6 +33,7 @@ export interface CyclistStats {
   weekEarnings: number;
   monthEarnings: number;
   completedToday: number;
+  completedThisWeek: number;
   totalRides: number;
 }
 
@@ -93,11 +94,21 @@ export function useCyclistStats(userId: string | undefined) {
         acc.todayEarnings += total;
         acc.completedToday += 1;
       }
-      if (at && at >= weekStart) acc.weekEarnings += total;
+      if (at && at >= weekStart) {
+        acc.weekEarnings += total;
+        acc.completedThisWeek += 1;
+      }
       if (at && at >= monthStart) acc.monthEarnings += total;
       return acc;
     },
-    { todayEarnings: 0, weekEarnings: 0, monthEarnings: 0, completedToday: 0, totalRides: 0 }
+    {
+      todayEarnings: 0,
+      weekEarnings: 0,
+      monthEarnings: 0,
+      completedToday: 0,
+      completedThisWeek: 0,
+      totalRides: 0,
+    }
   );
 
   stats.totalRides = rides.length;

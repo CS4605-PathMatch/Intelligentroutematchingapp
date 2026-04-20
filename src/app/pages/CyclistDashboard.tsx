@@ -79,8 +79,8 @@ export default function CyclistDashboard() {
             <div className="text-xs text-blue-100">This Week</div>
           </Card>
           <Card className="bg-white/10 backdrop-blur border-white/20 p-3 text-center">
-            <div className="text-2xl">{stats.completedToday}</div>
-            <div className="text-xs text-blue-100">Completed</div>
+            <div className="text-2xl">{stats.completedThisWeek}</div>
+            <div className="text-xs text-blue-100 leading-tight">Completed This Week</div>
           </Card>
         </div>
       </div>
