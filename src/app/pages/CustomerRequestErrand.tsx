@@ -105,9 +105,9 @@ export default function CustomerRequestErrand() {
   };
 
   const urgencyOptions = [
-    { value: "flexible", label: "Flexible", desc: "Within 2 hours", color: "bg-gray-100 text-gray-700 border-gray-300" },
-    { value: "soon", label: "Soon", desc: "Within 30 min", color: "bg-orange-100 text-orange-700 border-orange-300" },
-    { value: "urgent", label: "Urgent", desc: "ASAP", color: "bg-red-100 text-red-700 border-red-300" },
+    { value: "flexible", label: "Flexible", desc: "Within 2 hours", surcharge: "", color: "bg-gray-100 text-gray-700 border-gray-300" },
+    { value: "soon", label: "Soon", desc: "Within 30 min", surcharge: "+$2", color: "bg-orange-100 text-orange-700 border-orange-300" },
+    { value: "urgent", label: "Urgent", desc: "ASAP", surcharge: "+$5", color: "bg-red-100 text-red-700 border-red-300" },
   ];
 
   return (
@@ -215,6 +215,7 @@ export default function CustomerRequestErrand() {
               >
                 <div className="text-sm">{option.label}</div>
                 <div className="text-xs mt-1 opacity-75">{option.desc}</div>
+                {option.surcharge && <div className="text-xs mt-1 font-semibold">{option.surcharge}</div>}
               </button>
             ))}
           </div>
